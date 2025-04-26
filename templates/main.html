@@ -3,163 +3,452 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WhatsApp AIT - Чат</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <title>WhatsappAIT - Главная страница</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #25D366;
+            --text-color: #333;
+            --bg-color: #f5f5f5;
+            --card-bg: #fff;
+            --shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            --header-bg: #128C7E;
+            --header-text: #fff;
+            --sidebar-bg: rgba(255, 255, 255, 0.15);
+            --sidebar-border: rgba(255, 255, 255, 0.1);
+            --search-bg: rgba(255, 255, 255, 0.2);
+            --icon-color: #777;
+            --user-icon-bg: rgba(224, 224, 224, 0.7);
+            --no-chats-text: rgba(0, 0, 0, 0.4);
+            --main-overlay: rgba(144, 238, 215, 0.6);
+        }
+
+        .dark-theme {
+            --text-color: #f5f5f5;
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --shadow: 0 4px 8px rgba(255, 255, 255, 0.05);
+            --header-bg: #075E54;
+            --header-text: #f5f5f5;
+            --sidebar-bg: rgba(0, 0, 0, 0.25);
+            --sidebar-border: rgba(255, 255, 255, 0.05);
+            --search-bg: rgba(0, 0, 0, 0.2);
+            --icon-color: #aaa;
+            --user-icon-bg: rgba(51, 51, 51, 0.7);
+            --no-chats-text: rgba(255, 255, 255, 0.4);
+            --main-overlay: rgba(0, 0, 0, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', 'Segoe UI', sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .bg-wrapper {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: -10;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .light-theme .bg-wrapper {
+            background-image: url('/static/images/background.jpg');
+        }
+
+        .dark-theme .bg-wrapper {
+            background-image: url('/static/images/darkBack.jpg');
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            backdrop-filter: blur(15px);
+            border-right: 1px solid var(--sidebar-border);
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            z-index: 2;
+            overflow-y: auto;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            margin-bottom: 15px;
+            color: var(--text-color);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #3498db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+            overflow: hidden;
+        }
+
+        .user-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .user-details {
+            flex-grow: 1;
+        }
+
+        .user-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--text-color);
+        }
+
+        .user-email {
+            font-size: 12px;
+            color: var(--icon-color);
+        }
+
+        .user-controls {
+            display: flex;
+            align-items: center;
+        }
+
+        .options-icon, .refresh-icon, .theme-toggle {
+            color: var(--icon-color);
+            cursor: pointer;
+            font-size: 20px;
+            margin-left: 10px;
+            background: none;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .theme-toggle img {
+            width: 20px;
+            height: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .theme-toggle:hover img {
+            transform: rotate(30deg);
+        }
+
+        .search-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 15px 10px 35px;
+            border-radius: 20px;
+            border: none;
+            background-color: var(--search-bg);
+            backdrop-filter: blur(8px);
+            font-size: 14px;
+            color: var(--text-color);
+            outline: none;
+        }
+
+        .search-input::placeholder {
+            color: var(--icon-color);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--icon-color);
+        }
+
+        .user-icons {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .user-icon {
+            width: 32px;
+            height: 32px;
+            background-color: var(--user-icon-bg);
+            backdrop-filter: blur(5px);
+            border-radius: 50%;
+            margin-left: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-color);
+            transition: all 0.2s ease;
+        }
+
+        .user-icon:hover {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .chat-list {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        .no-chats {
+            text-align: center;
+            color: var(--no-chats-text);
+            font-size: 14px;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+        }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .space-bg {
+            display: none;
+        }
+
+        .main-content::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--main-overlay);
+            backdrop-filter: blur(4px);
+            z-index: 1;
+        }
+
+        .chat-logo {
+            width: 80px;
+            height: 80px;
+            background-color: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            z-index: 2;
+            box-shadow: var(--shadow);
+        }
+
+        .chat-logo-icon {
+            color: white;
+            font-size: 40px;
+        }
+
+        .chat-title {
+            font-size: 28px;
+            font-weight: 500;
+            color: var(--text-color);
+            z-index: 2;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .chat-subtitle {
+            font-size: 16px;
+            color: var(--text-color);
+            opacity: 0.8;
+            z-index: 2;
+            text-align: center;
+            max-width: 400px;
+            margin-bottom: 30px;
+        }
+
+        .action-button {
+            padding: 12px 24px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 2;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow);
+        }
+
+        .action-button:hover {
+            transform: scale(1.05);
+            background-color: #128C7E;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 80px;
+                padding: 10px;
+            }
+
+            .sidebar.expanded {
+                width: 250px;
+            }
+
+            .user-details, .user-email, .search-input::placeholder {
+                display: none;
+            }
+
+            .sidebar.expanded .user-details,
+            .sidebar.expanded .user-email,
+            .sidebar.expanded .search-input::placeholder {
+                display: block;
+            }
+
+            .search-input {
+                padding-left: 15px;
+            }
+
+            .search-icon {
+                display: none;
+            }
+
+            .user-icon {
+                width: 28px;
+                height: 28px;
+            }
+        }
+    </style>
 </head>
-<body>
+<body class="light-theme">
+    <div class="bg-wrapper"></div>
     <div class="sidebar">
-        <div class="sidebar-header">
-            <div class="avatar">
-                <img src="{{ url_for('get_user_photo_route') }}" alt="Ваше фото">
-            </div>
-            <div class="menu-button">
-                <span class="material-icons">more_vert</span>
-            </div>
-        </div>
-        <div class="search-container">
-            <span class="search-icon material-icons">search</span>
-            <input type="text" placeholder="Поиск или новый чат" id="chatSearchInput">
-            <div class="action-buttons">
-                <button id="addContactBtn" class="action-btn" title="Добавить контакт">
-                    <span class="material-icons">person_add</span>
-                </button>
-                <button id="createGroupBtn" class="action-btn" title="Создать группу">
-                    <span class="material-icons">group_add</span>
-                </button>
-            </div>
-        </div>
-        <ul class="user-list" id="chatsList">
-            <!-- Список чатов будет заполнен динамически -->
-        </ul>
-    </div>
-    
-    <div class="chat-window">
-        <div class="chat-header">
-            <div class="avatar chat-avatar" id="chatProfilePhoto">
-                <img src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Фото профиля">
+        <div class="user-info">
+            <div class="user-avatar">
+                <img src="/api/user/photo?t={{ timestamp }}" alt="{{ username }}">
             </div>
             <div class="user-details">
-                <div class="username" id="chatUsername">Выберите чат</div>
-                <div class="status" id="chatStatus">-</div>
+                <div class="user-name">{{ username }}</div>
+                <div class="user-email">Онлайн</div>
             </div>
-        </div>
-        
-        <div class="messages" id="messagesContainer">
-            <!-- Сообщения будут загружаться динамически -->
-            <div class="empty-chat-message" id="emptyChatMessage">
-                Выберите чат, чтобы начать общение
-            </div>
-        </div>
-        
-        <div class="input-area" id="messageInputArea">
-            <input type="text" placeholder="Введите сообщение..." id="messageInput">
-            <button id="sendMessageBtn">
-                <span class="material-icons">send</span>
-            </button>
-        </div>
-    </div>
-    
-    <!-- Модальное окно для поиска пользователей -->
-    <div class="modal" id="searchUserModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Найти пользователя</h3>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="modal-search">
-                <input type="text" id="userSearchInput" placeholder="Введите имя пользователя">
-                <button id="searchUsersBtn">
-                    <span class="material-icons">search</span>
+            <div class="user-controls">
+                <button class="theme-toggle" id="themeToggle">
+                    <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
                 </button>
+                <div class="options-icon">⋮</div>
+                <div class="refresh-icon">↻</div>
             </div>
-            <div class="search-results" id="searchResults">
-                <!-- Результаты поиска будут здесь -->
-            </div>
+        </div>
+        
+        <div class="search-container">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" placeholder="Поиск...">
+        </div>
+        
+        <div class="user-icons">
+            <div class="user-icon" title="Новый чат">💬</div>
+            <div class="user-icon" title="Новая группа">👥</div>
+        </div>
+        
+        <div class="chat-list">
+            <div class="no-chats">Нет активных чатов</div>
         </div>
     </div>
     
-    <!-- Модальное окно для просмотра профиля -->
-    <div class="modal" id="profileModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Профиль</h3>
-                <span class="close-modal">&times;</span>
-            </div>
-            <div class="profile-details">
-                <div class="profile-photo">
-                    <img id="profilePhotoLarge" src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Фото профиля">
-                </div>
-                <div class="profile-info">
-                    <h2 id="profileName">Имя пользователя</h2>
-                </div>
-            </div>
+    <div class="main-content">
+        <div class="chat-logo">
+            <span class="chat-logo-icon">💬</span>
         </div>
+        <div class="chat-title">WhatsappAIT</div>
+        <div class="chat-subtitle">Выберите контакт из списка чатов или создайте новый чат для начала общения</div>
+        <button class="action-button">Начать новый чат</button>
     </div>
 
-    <!-- Модальное окно добавления контактов в новом дизайне -->
-    <div class="modal-overlay" id="addContactModal">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-actions">
-                    <a class="cancel-action" id="cancelAddContact">Отмена</a>
-                    <div class="modal-title">Новый контакт</div>
-                    <a class="save-action" id="confirmAddContact">Сохранить</a>
-                </div>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <input type="text" id="contactFirstName" placeholder="Имя" required>
-                </div>
-                <div class="form-group">
-                    <input type="text" id="contactLastName" placeholder="Фамилия">
-                </div>
-                <div class="form-group contact-input-group">
-                    <span class="material-icons search-icon">search</span>
-                    <input type="text" id="contactSearch" placeholder="Поиск пользователя...">
-                </div>
-                <div class="contact-results" id="contactResults">
-                    <!-- Результаты поиска будут добавлены здесь динамически -->
-                </div>
-            </div>
-        </div>
-    </div>
+    <script>
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        
+        // Проверяем сохраненную тему
+        if(localStorage.getItem('theme') === 'dark') {
+            document.body.classList.add('dark-theme');
+            document.body.classList.remove('light-theme');
+            themeIcon.src = '/static/images/moon.png';
+        } else {
+            document.body.classList.add('light-theme');
+            document.body.classList.remove('dark-theme');
+            themeIcon.src = '/static/images/sun.png';
+        }
+        
+        // Переключение темы
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-theme');
+            document.body.classList.toggle('light-theme');
+            
+            if(document.body.classList.contains('dark-theme')) {
+                themeIcon.src = '/static/images/moon.png';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                themeIcon.src = '/static/images/sun.png';
+                localStorage.setItem('theme', 'light');
+            }
+        });
 
-    <!-- Модальное окно создания группы в новом дизайне -->
-    <div class="modal-overlay" id="createGroupModal">
-        <div class="modal-container">
-            <div class="modal-header">
-                <div class="modal-actions">
-                    <a class="cancel-action" id="cancelCreateGroup">Отмена</a>
-                    <div class="modal-title">Новая группа</div>
-                    <a class="save-action" id="confirmCreateGroup">Создать</a>
-                </div>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <div class="group-avatar-preview">
-                        <img src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Group Avatar" id="groupAvatarImg">
-                    </div>
-                    <input type="file" id="groupAvatar" style="display: none;" accept="image/*">
-                    <button class="modal-btn btn-cancel" id="changeGroupAvatar">Выбрать аватар</button>
-                </div>
-                <div class="form-group">
-                    <input type="text" id="groupName" placeholder="Название группы" required>
-                </div>
-                <div class="form-group contact-input-group">
-                    <span class="material-icons search-icon">search</span>
-                    <input type="text" id="groupMembers" placeholder="Добавить участников">
-                </div>
-                <div class="selected-members" id="selectedMembers">
-                    <!-- Выбранные пользователи будут добавлены здесь -->
-                </div>
-                <div class="group-members-list" id="groupMembersList">
-                    <!-- Список контактов будет добавлен здесь динамически -->
-                </div>
-            </div>
-        </div>
-    </div>
+        // Функционал мобильного меню
+        if (window.innerWidth <= 768) {
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.addEventListener('click', function() {
+                this.classList.toggle('expanded');
+            });
+        }
 
-    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+        // Кнопка нового чата
+        document.querySelector('.action-button').addEventListener('click', function() {
+            // Здесь будет логика создания нового чата
+            alert('Функция создания нового чата будет доступна в ближайшем обновлении');
+        });
+
+        // Функция для обновления URL изображения профиля с новой меткой времени
+        function updateProfileImage() {
+            const profileImg = document.querySelector('.user-avatar img');
+            if (profileImg) {
+                const timestamp = new Date().getTime();
+                profileImg.src = `/api/user/photo?t=${timestamp}`;
+            }
+        }
+        
+        // Обновляем изображение при загрузке страницы
+        updateProfileImage();
+        
+        // Также можно обновлять его периодически или при определенных действиях пользователя
+        document.querySelector('.refresh-icon').addEventListener('click', function() {
+            updateProfileImage();
+        });
+    </script>
 </body>
 </html>

@@ -1,5 +1,7 @@
-from flask import Blueprint, jsonify, request, session
 import sqlite3
+from flask import Blueprint, request, jsonify, session, send_file
+from io import BytesIO
+import os
 from datetime import datetime
 
 chat_bp = Blueprint('chat', __name__)
@@ -11,264 +13,522 @@ def get_db_connection():
     return conn
 
 @chat_bp.route('/api/chats', methods=['GET'])
-def get_chats():
-    """Получить список чатов текущего пользователя"""
+def get_user_chats():
+    """Get list of all chats for the current user"""
     if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Пользователь не авторизован'}), 401
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
     
-    user_id = session['user_id']
+    current_user_id = session.get('user_id')
     
     conn = get_db_connection()
-    # Получаем список диалогов пользователя с информацией о последнем сообщении
-    chats = conn.execute('''
-        SELECT 
-            c.id,
-            CASE 
-                WHEN d.user1_id = ? THEN u2.nickname 
-                WHEN d.user2_id = ? THEN u1.nickname
-            END as user_name,
-            CASE 
-                WHEN d.user1_id = ? THEN u2.id 
-                WHEN d.user2_id = ? THEN u1.id
-            END as other_user_id,
-            m.content as last_message_content,
-            m.timestamp as last_message_time,
-            (SELECT COUNT(*) FROM messages 
-             WHERE chat_id = c.id 
-             AND sender_id != ? 
-             AND timestamp > (SELECT COALESCE(
-                 (SELECT MAX(timestamp) FROM messages WHERE chat_id = c.id AND sender_id = ?), 
-                 '1970-01-01'))
-            ) as unread_count
+    
+    # Получение личных диалогов пользователя
+    dialogs = conn.execute('''
+        SELECT c.id as chat_id, c.chat_name, c.chat_type, c.created_at,
+               u.id as user_id, u.nickname,
+               (SELECT content FROM messages 
+                WHERE chat_id = c.id 
+                ORDER BY timestamp DESC LIMIT 1) as last_message,
+               (SELECT timestamp FROM messages 
+                WHERE chat_id = c.id 
+                ORDER BY timestamp DESC LIMIT 1) as last_message_time
         FROM chats c
         JOIN dialogs d ON c.id = d.chat_id
-        JOIN users u1 ON d.user1_id = u1.id
-        JOIN users u2 ON d.user2_id = u2.id
-        LEFT JOIN (
-            SELECT m1.* 
-            FROM messages m1
-            JOIN (
-                SELECT chat_id, MAX(timestamp) as max_timestamp 
-                FROM messages 
-                GROUP BY chat_id
-            ) m2 ON m1.chat_id = m2.chat_id AND m1.timestamp = m2.max_timestamp
-        ) m ON c.id = m.chat_id
+        JOIN users u ON (d.user1_id = u.id OR d.user2_id = u.id) AND u.id != ?
         WHERE d.user1_id = ? OR d.user2_id = ?
-        ORDER BY m.timestamp DESC NULLS LAST
-    ''', (user_id, user_id, user_id, user_id, user_id, user_id, user_id, user_id)).fetchall()
+        ORDER BY last_message_time DESC NULLS LAST
+    ''', (current_user_id, current_user_id, current_user_id)).fetchall()
     
-    chat_list = []
-    for chat in chats:
-        # Получаем фото другого пользователя
-        other_user_id = chat['other_user_id']
-        user_photo = conn.execute('SELECT profile_photo FROM users WHERE id = ?', (other_user_id,)).fetchone()
-        
-        photo_url = None
-        if user_photo and user_photo['profile_photo']:
-            # Если есть фото, формируем URL для его получения
-            photo_url = f'/api/users/{other_user_id}/photo'
-            
-        # Форматируем последнее сообщение
-        timestamp_str = "Нет сообщений"
-        timestamp_raw = None
-        latest_message = "Нет сообщений"
-        
-        if chat['last_message_content']:
-            latest_message = chat['last_message_content']
-            
-            # Форматируем время сообщения
-            timestamp = datetime.strptime(chat['last_message_time'], '%Y-%m-%d %H:%M:%S')
-            now = datetime.now()
-            diff = now - timestamp
-            
-            if diff.days > 0:
-                if diff.days == 1:
-                    timestamp_str = "Вчера"
-                else:
-                    timestamp_str = f"{diff.days} дн. назад"
-            elif diff.seconds >= 3600:
-                hours = diff.seconds // 3600
-                timestamp_str = f"{hours} ч. назад"
-            elif diff.seconds >= 60:
-                minutes = diff.seconds // 60
-                timestamp_str = f"{minutes} мин. назад"
-            else:
-                timestamp_str = "Сейчас"
-                
-            timestamp_raw = chat['last_message_time']
-        
-        chat_list.append({
-            'id': chat['id'],
-            'user_name': chat['user_name'],
-            'user_photo': photo_url,
-            'latest_message': latest_message,
-            'timestamp': timestamp_str,
-            'timestamp_raw': timestamp_raw,
-            'unread': chat['unread_count'] > 0
+    # Получение групповых чатов пользователя
+    groups = conn.execute('''
+        SELECT c.id as chat_id, c.chat_name, c.chat_type, c.created_at,
+               gc.id as group_id, gc.description,
+               (SELECT content FROM messages 
+                WHERE chat_id = c.id 
+                ORDER BY timestamp DESC LIMIT 1) as last_message,
+               (SELECT timestamp FROM messages 
+                WHERE chat_id = c.id 
+                ORDER BY timestamp DESC LIMIT 1) as last_message_time
+        FROM chats c
+        JOIN group_chats gc ON c.id = gc.chat_id
+        JOIN group_members gm ON gc.id = gm.group_chat_id
+        WHERE gm.user_id = ? AND gm.status = 'active'
+        ORDER BY last_message_time DESC NULLS LAST
+    ''', (current_user_id,)).fetchall()
+    
+    # Преобразуем результаты в удобный формат
+    chats_list = []
+    
+    for dialog in dialogs:
+        chats_list.append({
+            "id": dialog['chat_id'],
+            "name": dialog['chat_name'] or dialog['nickname'],
+            "type": "dialog",
+            "participant_id": dialog['user_id'],
+            "participant_name": dialog['nickname'],
+            "last_message": dialog['last_message'],
+            "last_message_time": dialog['last_message_time'],
+            "created_at": dialog['created_at']
         })
     
+    for group in groups:
+        chats_list.append({
+            "id": group['chat_id'],
+            "name": group['chat_name'],
+            "type": "group",
+            "group_id": group['group_id'],
+            "description": group['description'],
+            "last_message": group['last_message'],
+            "last_message_time": group['last_message_time'],
+            "created_at": group['created_at']
+        })
+    
+    # Сортируем чаты по времени последнего сообщения
+    chats_list.sort(
+        key=lambda x: x['last_message_time'] if x['last_message_time'] else x['created_at'], 
+        reverse=True
+    )
+    
     conn.close()
-    
-    return jsonify({'success': True, 'chats': chat_list})
+    return jsonify({
+        "success": True,
+        "chats": chats_list
+    })
 
-@chat_bp.route('/api/chats', methods=['POST'])
-def create_chat():
-    """Создать новый чат с пользователем"""
+@chat_bp.route('/api/chat/create_dialog', methods=['POST'])
+def create_dialog():
+    """Create a new dialog between two users"""
     if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Пользователь не авторизован'}), 401
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
     
-    current_user_id = session['user_id']
     data = request.get_json()
-    
     if not data or 'user_id' not in data:
-        return jsonify({'success': False, 'message': 'Не указан ID пользователя'}), 400
+        return jsonify({"success": False, "message": "Не указан ID пользователя"}), 400
     
+    current_user_id = session.get('user_id')
     other_user_id = data['user_id']
     
     # Проверяем, что такой пользователь существует
     conn = get_db_connection()
-    user = conn.execute('SELECT id FROM users WHERE id = ?', (other_user_id,)).fetchone()
+    user = conn.execute('SELECT id, nickname FROM users WHERE id = ?', (other_user_id,)).fetchone()
     
     if not user:
         conn.close()
-        return jsonify({'success': False, 'message': 'Пользователь не найден'}), 404
+        return jsonify({"success": False, "message": "Пользователь не найден"}), 404
     
-    # Проверяем, существует ли уже чат между этими пользователями
-    existing_chat = conn.execute('''
-        SELECT c.id FROM chats c
-        JOIN dialogs d ON c.id = d.chat_id
+    # Проверяем, что диалог с этим пользователем еще не создан
+    existing_dialog = conn.execute('''
+        SELECT d.id, d.chat_id FROM dialogs d
         WHERE (d.user1_id = ? AND d.user2_id = ?) OR (d.user1_id = ? AND d.user2_id = ?)
     ''', (current_user_id, other_user_id, other_user_id, current_user_id)).fetchone()
     
-    if existing_chat:
-        # Если чат уже существует, возвращаем его
-        chat_id = existing_chat['id']
-    else:
-        # Создаем новый чат и диалог
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO chats (chat_type) VALUES (?)', ('dialog',))
-        chat_id = cursor.lastrowid
+    if existing_dialog:
+        # Диалог уже существует, возвращаем его ID
+        chat_id = existing_dialog['chat_id']
+        conn.close()
+        return jsonify({
+            "success": True, 
+            "message": "Диалог уже существует", 
+            "chat_id": chat_id
+        })
+    
+    try:
+        # Создаем новую запись в таблице chats
+        conn.execute('INSERT INTO chats (chat_name, chat_type) VALUES (?, ?)', 
+                    (None, 'dialog'))
+        chat_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
         
-        cursor.execute('INSERT INTO dialogs (chat_id, user1_id, user2_id) VALUES (?, ?, ?)',
-                     (chat_id, current_user_id, other_user_id))
+        # Создаем новый диалог
+        conn.execute('''
+            INSERT INTO dialogs (chat_id, user1_id, user2_id) 
+            VALUES (?, ?, ?)
+        ''', (chat_id, current_user_id, other_user_id))
         
         conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Диалог успешно создан",
+            "chat_id": chat_id,
+            "user": {
+                "id": user['id'],
+                "nickname": user['nickname']
+            }
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при создании диалога: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/create_group', methods=['POST'])
+def create_group():
+    """Create a new group chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
     
-    # Получаем информацию о чате для ответа
-    other_user = conn.execute('SELECT nickname, profile_photo FROM users WHERE id = ?', 
-                           (other_user_id,)).fetchone()
+    # Проверяем, пришли ли данные в JSON или form-data
+    if request.is_json:
+        data = request.get_json()
+        chat_name = data.get('chat_name')
+        description = data.get('description', '')
+        member_ids = data.get('member_ids', [])
+    else:
+        chat_name = request.form.get('chat_name')
+        description = request.form.get('description', '')
+        member_ids = request.form.getlist('member_ids')
     
-    photo_url = None
-    if other_user and other_user['profile_photo']:
-        photo_url = f'/api/users/{other_user_id}/photo'
+    if not chat_name:
+        return jsonify({"success": False, "message": "Не указано название группы"}), 400
     
-    chat_info = {
-        'id': chat_id,
-        'user_name': other_user['nickname'],
-        'user_photo': photo_url,
-        'latest_message': 'Нет сообщений',
-        'timestamp': 'Сейчас',
-        'unread': False
-    }
+    current_user_id = session.get('user_id')
+    
+    # Проверяем, существуют ли указанные пользователи
+    conn = get_db_connection()
+    for member_id in member_ids:
+        user = conn.execute('SELECT id FROM users WHERE id = ?', (member_id,)).fetchone()
+        if not user:
+            conn.close()
+            return jsonify({"success": False, "message": f"Пользователь с ID {member_id} не найден"}), 404
+    
+    # Добавляем текущего пользователя в список участников, если его там нет
+    if str(current_user_id) not in [str(m) for m in member_ids]:
+        member_ids.append(current_user_id)
+    
+    group_photo_data = None
+    if 'group_photo' in request.files:
+        group_photo = request.files['group_photo']
+        if group_photo.filename:
+            group_photo_data = group_photo.read()
+    
+    try:
+        # Создаем новую запись в таблице chats
+        conn.execute('INSERT INTO chats (chat_name, chat_type) VALUES (?, ?)', 
+                    (chat_name, 'group'))
+        chat_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        
+        # Создаем новую группу
+        conn.execute('''
+            INSERT INTO group_chats (chat_id, creator_id, description, group_photo) 
+            VALUES (?, ?, ?, ?)
+        ''', (chat_id, current_user_id, description, group_photo_data))
+        group_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        
+        # Добавляем текущего пользователя как админа
+        conn.execute('''
+            INSERT INTO group_admins (group_chat_id, user_id, admin_level)
+            VALUES (?, ?, ?)
+        ''', (group_id, current_user_id, 2))  # 2 - суперадмин/создатель
+        
+        # Добавляем всех участников
+        for member_id in member_ids:
+            conn.execute('''
+                INSERT INTO group_members (group_chat_id, user_id, invited_by, status)
+                VALUES (?, ?, ?, ?)
+            ''', (group_id, member_id, current_user_id, 'active'))
+        
+        conn.commit()
+        
+        # Создаем системное сообщение о создании группы
+        conn.execute('''
+            INSERT INTO messages (chat_id, sender_id, content)
+            VALUES (?, ?, ?)
+        ''', (chat_id, current_user_id, f"Группа '{chat_name}' создана"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Группа успешно создана",
+            "chat_id": chat_id,
+            "group_id": group_id
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при создании группы: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/group_photo/<int:group_id>', methods=['GET'])
+def get_group_photo(group_id):
+    """Get group chat photo"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    conn = get_db_connection()
+    
+    # Проверяем, является ли пользователь участником этой группы
+    member = conn.execute('''
+        SELECT gm.id FROM group_members gm
+        JOIN group_chats gc ON gm.group_chat_id = gc.id
+        WHERE gc.id = ? AND gm.user_id = ? AND gm.status = 'active'
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not member:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к группе"}), 403
+    
+    # Получаем фото группы
+    photo_data = conn.execute('''
+        SELECT group_photo FROM group_chats WHERE id = ?
+    ''', (group_id,)).fetchone()
     
     conn.close()
     
-    return jsonify({'success': True, 'chat': chat_info})
+    if not photo_data or not photo_data['group_photo']:
+        # Возвращаем дефолтное изображение для группы
+        default_photo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
+                                        'static', 'images', 'default_group.png')
+        return send_file(default_photo_path, mimetype='image/png')
+    
+    return send_file(
+        BytesIO(photo_data['group_photo']),
+        mimetype='image/jpeg',
+        as_attachment=False
+    )
 
-@chat_bp.route('/api/chats/<int:chat_id>/messages', methods=['GET'])
-def get_messages(chat_id):
-    """Получить сообщения для указанного чата"""
+@chat_bp.route('/api/chat/<int:chat_id>/messages', methods=['GET'])
+def get_chat_messages(chat_id):
+    """Get messages for a specific chat"""
     if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Пользователь не авторизован'}), 401
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
     
-    user_id = session['user_id']
+    current_user_id = session.get('user_id')
     
-    # Проверяем, что пользователь является участником этого чата
+    # Получаем параметры пагинации
+    limit = request.args.get('limit', 20, type=int)
+    offset = request.args.get('offset', 0, type=int)
+    
     conn = get_db_connection()
-    is_member = conn.execute('''
-        SELECT 1 FROM dialogs 
+    
+    # Проверяем, имеет ли пользователь доступ к чату
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
         WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
-    ''', (chat_id, user_id, user_id)).fetchone()
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
     
-    if not is_member:
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
         conn.close()
-        return jsonify({'success': False, 'message': 'Доступ запрещен'}), 403
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
     
-    # Получаем сообщения чата
+    # Получаем сообщения
     messages = conn.execute('''
-        SELECT m.id, m.content, m.sender_id, u.nickname as sender_name, m.timestamp
+        SELECT m.id, m.content, m.sender_id, u.nickname as sender_name,
+               m.timestamp, m.is_edited, m.edited_at, 
+               m.reply_to, m.media_type, m.forwarded_from,
+               (SELECT COUNT(*) FROM message_reads mr WHERE mr.message_id = m.id) as read_count
         FROM messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.chat_id = ?
-        ORDER BY m.timestamp ASC
-    ''', (chat_id,)).fetchall()
+        ORDER BY m.timestamp DESC
+        LIMIT ? OFFSET ?
+    ''', (chat_id, limit, offset)).fetchall()
     
-    message_list = []
-    for msg in messages:
-        message_list.append({
-            'id': msg['id'],
-            'content': msg['content'],
-            'sender_id': msg['sender_id'],
-            'sender_name': msg['sender_name'],
-            'timestamp': datetime.strptime(msg['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%H:%M'),
-            'timestamp_raw': msg['timestamp'],
-            'is_sent_by_me': msg['sender_id'] == user_id
+    # Преобразуем результаты в удобный формат
+    messages_list = []
+    for message in messages:
+        # Получаем информацию о сообщении, на которое был ответ
+        reply_info = None
+        if message['reply_to']:
+            reply = conn.execute('''
+                SELECT m.content, m.sender_id, u.nickname as sender_name
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE m.id = ?
+            ''', (message['reply_to'],)).fetchone()
+            
+            if reply:
+                reply_info = {
+                    "id": message['reply_to'],
+                    "content": reply['content'],
+                    "sender_id": reply['sender_id'],
+                    "sender_name": reply['sender_name']
+                }
+        
+        # Получаем информацию о пересланном сообщении
+        forwarded_info = None
+        if message['forwarded_from']:
+            forwarded = conn.execute('''
+                SELECT m.content, m.sender_id, u.nickname as sender_name
+                FROM messages m
+                JOIN users u ON m.sender_id = u.id
+                WHERE m.id = ?
+            ''', (message['forwarded_from'],)).fetchone()
+            
+            if forwarded:
+                forwarded_info = {
+                    "id": message['forwarded_from'],
+                    "content": forwarded['content'],
+                    "sender_id": forwarded['sender_id'],
+                    "sender_name": forwarded['sender_name']
+                }
+        
+        messages_list.append({
+            "id": message['id'],
+            "content": message['content'],
+            "sender_id": message['sender_id'],
+            "sender_name": message['sender_name'],
+            "timestamp": message['timestamp'],
+            "is_edited": bool(message['is_edited']),
+            "edited_at": message['edited_at'],
+            "media_type": message['media_type'],
+            "has_media": message['media_type'] is not None,
+            "read_count": message['read_count'],
+            "reply_to": reply_info,
+            "forwarded_from": forwarded_info,
+            "is_own": message['sender_id'] == current_user_id
         })
     
-    conn.close()
+    # Отмечаем сообщения как прочитанные
+    for message in messages:
+        # Не отмечаем собственные сообщения
+        if message['sender_id'] != current_user_id:
+            conn.execute('''
+                INSERT OR IGNORE INTO message_reads (message_id, user_id)
+                VALUES (?, ?)
+            ''', (message['id'], current_user_id))
     
-    return jsonify({'success': True, 'messages': message_list})
-
-@chat_bp.route('/api/chats/<int:chat_id>/messages', methods=['POST'])
-def create_message(chat_id):
-    """Создать новое сообщение в чате"""
-    if 'user_id' not in session:
-        return jsonify({'success': False, 'message': 'Пользователь не авторизован'}), 401
-    
-    user_id = session['user_id']
-    data = request.get_json()
-    
-    if not data or 'content' not in data:
-        return jsonify({'success': False, 'message': 'Не указано содержимое сообщения'}), 400
-    
-    content = data['content']
-    
-    # Проверяем, что пользователь является участником этого чата
-    conn = get_db_connection()
-    is_member = conn.execute('''
-        SELECT 1 FROM dialogs 
-        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
-    ''', (chat_id, user_id, user_id)).fetchone()
-    
-    if not is_member:
-        conn.close()
-        return jsonify({'success': False, 'message': 'Доступ запрещен'}), 403
-    
-    # Создаем новое сообщение
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO messages (chat_id, sender_id, content) VALUES (?, ?, ?)',
-                 (chat_id, user_id, content))
-    message_id = cursor.lastrowid
     conn.commit()
-    
-    # Получаем созданное сообщение для ответа
-    message = conn.execute('''
-        SELECT m.id, m.content, m.sender_id, u.nickname as sender_name, m.timestamp
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.id = ?
-    ''', (message_id,)).fetchone()
-    
     conn.close()
     
-    message_info = {
-        'id': message['id'],
-        'content': message['content'],
-        'sender_id': message['sender_id'],
-        'sender_name': message['sender_name'],
-        'timestamp': datetime.strptime(message['timestamp'], '%Y-%m-%d %H:%M:%S').strftime('%H:%M'),
-        'timestamp_raw': message['timestamp'],
-        'is_sent_by_me': True
-    }
+    return jsonify({
+        "success": True,
+        "messages": messages_list,
+        "total": len(messages_list),
+        "has_more": len(messages_list) == limit
+    })
+
+@chat_bp.route('/api/chat/<int:chat_id>/send_message', methods=['POST'])
+def send_message(chat_id):
+    """Send a new message to a chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
     
-    return jsonify({'success': True, 'message': message_info})
+    current_user_id = session.get('user_id')
+    
+    # Проверяем, пришли ли данные в JSON или form-data
+    if request.is_json:
+        data = request.get_json()
+        content = data.get('content')
+        reply_to = data.get('reply_to')
+        forwarded_from = data.get('forwarded_from')
+    else:
+        content = request.form.get('content')
+        reply_to = request.form.get('reply_to')
+        forwarded_from = request.form.get('forwarded_from')
+        
+    if not content and 'media' not in request.files:
+        return jsonify({"success": False, "message": "Сообщение не может быть пустым"}), 400
+    
+    conn = get_db_connection()
+    
+    # Проверяем, имеет ли пользователь доступ к чату
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
+        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
+    
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+    
+    # Обработка медиафайла, если есть
+    media_content = None
+    media_type = None
+    
+    if 'media' in request.files:
+        media_file = request.files['media']
+        if media_file.filename:
+            media_content = media_file.read()
+            # Определяем тип медиа по расширению файла
+            ext = os.path.splitext(media_file.filename)[1].lower()
+            if ext in ['.jpg', '.jpeg', '.png', '.gif']:
+                media_type = 'image'
+            elif ext in ['.mp4', '.avi', '.mov']:
+                media_type = 'video'
+            elif ext in ['.mp3', '.wav', '.ogg']:
+                media_type = 'audio'
+            else:
+                media_type = 'file'
+    
+    try:
+        # Создаем новое сообщение
+        conn.execute('''
+            INSERT INTO messages (
+                chat_id, sender_id, content, 
+                media_content, media_type, 
+                reply_to, forwarded_from
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            chat_id, current_user_id, content, 
+            media_content, media_type, 
+            reply_to, forwarded_from
+        ))
+        
+        message_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        
+        # Получаем информацию о созданном сообщении
+        message = conn.execute('''
+            SELECT m.id, m.content, m.sender_id, u.nickname as sender_name,
+                m.timestamp, m.media_type
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.id = ?
+        ''', (message_id,)).fetchone()
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": {
+                "id": message['id'],
+                "content": message['content'],
+                "sender_id": message['sender_id'],
+                "sender_name": message['sender_name'],
+                "timestamp": message['timestamp'],
+                "media_type": message['media_type'],
+                "has_media": message['media_type'] is not None
+            }
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при отправке сообщения: {str(e)}"}), 500

@@ -1,180 +1,170 @@
 document.addEventListener('DOMContentLoaded', function() {
-    const loginButton = document.getElementById('loginButton');
-    const registerButton = document.getElementById('registerButton');
-    const loginError = document.getElementById('loginError');
-    const registerError = document.getElementById('registerError');
-    
-    // Элементы для многошаговой регистрации
-    const goToStep2Button = document.getElementById('goToStep2Button');
-    const goToStep3Button = document.getElementById('goToStep3Button');
-    const backToStep1Button = document.getElementById('backToStep1Button');
-    const backToStep2Button = document.getElementById('backToStep2Button');
-    const selectPhotoButton = document.getElementById('selectPhotoButton');
-    const profilePhotoInput = document.getElementById('profilePhotoInput');
-    const profilePhotoPreview = document.getElementById('profilePhotoPreview');
-    const nicknameError = document.getElementById('nicknameError');
-    const registerStep1 = document.getElementById('registerStep1');
-    const registerStep2 = document.getElementById('registerStep2');
-    const registerStep3 = document.getElementById('registerStep3');
+    const loginForm = document.getElementById('login-form');
+    const registerForm = document.getElementById('register-form');
+    const toggleLinks = document.querySelectorAll('.toggle-link');
+    const loginButton = document.getElementById('login-button');
+    const registerButton = document.getElementById('register-button');
+    const sendCodeButton = document.getElementById('send-code');
+    const messageElement = document.getElementById('message');
 
-    // Переход между шагами регистрации
-    goToStep2Button.addEventListener('click', function() {
-        const nickname = document.getElementById('registerNickname').value.trim();
-        
-        if (!nickname) {
-            nicknameError.textContent = 'Пожалуйста, введите никнейм';
-            nicknameError.classList.remove('hidden');
-            return;
-        }
-        
-        // Проверка доступности никнейма через API
-        fetch('/check-nickname', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ nickname }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.available) {
-                registerStep1.classList.add('hidden');
-                registerStep2.classList.remove('hidden');
-                nicknameError.classList.add('hidden');
-            } else {
-                nicknameError.textContent = 'Этот никнейм уже занят';
-                nicknameError.classList.remove('hidden');
-            }
-        })
-        .catch(error => {
-            nicknameError.textContent = 'Ошибка проверки никнейма';
-            nicknameError.classList.remove('hidden');
-            console.error('Error:', error);
+    // Toggle between login and register forms
+    toggleLinks.forEach(link => {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            loginForm.classList.toggle('active');
+            registerForm.classList.toggle('active');
         });
     });
 
-    // Обработка выбора фото профиля
-    selectPhotoButton.addEventListener('click', function() {
-        profilePhotoInput.click();
-    });
+    // Handle login
+    loginButton.addEventListener('click', async function () {
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
 
-    profilePhotoInput.addEventListener('change', function() {
-        if (this.files && this.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                profilePhotoPreview.src = e.target.result;
-            };
-            reader.readAsDataURL(this.files[0]);
-        }
-    });
-
-    goToStep3Button.addEventListener('click', function() {
-        registerStep2.classList.add('hidden');
-        registerStep3.classList.remove('hidden');
-    });
-
-    backToStep1Button.addEventListener('click', function() {
-        registerStep2.classList.add('hidden');
-        registerStep1.classList.remove('hidden');
-    });
-
-    backToStep2Button.addEventListener('click', function() {
-        registerStep3.classList.add('hidden');
-        registerStep2.classList.remove('hidden');
-    });
-
-    // Функция для входа
-    loginButton.addEventListener('click', function() {
-        const nickname = document.getElementById('loginNickname').value.trim();
-        const password = document.getElementById('loginPassword').value;
-
-        if (!nickname || !password) {
-            loginError.textContent = 'Пожалуйста, заполните все поля';
-            loginError.classList.remove('hidden');
+        if (!email || !password) {
+            showMessage('Пожалуйста, заполните все поля', 'error');
             return;
         }
 
-        // Отправляем запрос на сервер для входа
-        fetch('/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ nickname, password }),
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.location.href = '/chat';  // Изменено с '/main' на '/chat'
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nickname: email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showMessage('Авторизация успешна!', 'success');
+                setTimeout(() => {
+                    window.location.href = '/main';  // Может работать и с /main из-за нашего двойного маршрута
+                }, 1000);
             } else {
-                loginError.textContent = data.message || 'Ошибка входа';
-                loginError.classList.remove('hidden');
+                showMessage(data.message || 'Ошибка при авторизации', 'error');
             }
-        })
-        .catch(error => {
-            loginError.textContent = 'Ошибка сервера';
-            loginError.classList.remove('hidden');
+        } catch (error) {
             console.error('Error:', error);
-        });
+            showMessage('Сервер недоступен', 'error');
+        }
     });
 
-    // Функция для регистрации
-    registerButton.addEventListener('click', function() {
-        const nickname = document.getElementById('registerNickname').value.trim();
-        const password = document.getElementById('registerPassword').value;
-        const confirmPassword = document.getElementById('registerConfirmPassword').value;
-        const profilePhotoFile = profilePhotoInput.files[0];
+    // Handle registration
+    registerButton.addEventListener('click', async function () {
+        const username = document.getElementById('register-name').value;
+        const email = document.getElementById('register-email').value;
+        const password = document.getElementById('register-password').value;
+        const verificationCode = document.getElementById('verification-code').value;
+        const profilePic = document.getElementById('profile-pic').files[0];
 
-        // Сбросить предыдущие ошибки
-        registerError.classList.add('hidden');
-        
-        // Валидация
-        if (!password || !confirmPassword) {
-            registerError.textContent = 'Пожалуйста, заполните все поля';
-            registerError.classList.remove('hidden');
-            return;
-        }
-        
-        if (password !== confirmPassword) {
-            registerError.textContent = 'Пароли не совпадают';
-            registerError.classList.remove('hidden');
+        if (!username || !email || !password || !verificationCode) {
+            showMessage('Пожалуйста, заполните все обязательные поля', 'error');
             return;
         }
 
-        if (password.length < 6) {
-            registerError.textContent = 'Пароль должен содержать не менее 6 символов';
-            registerError.classList.remove('hidden');
-            return;
-        }
+        try {
+            // Используем FormData для отправки всех данных вместе с фото одним запросом
+            const formData = new FormData();
+            formData.append('nickname', username);
+            formData.append('email', email);
+            formData.append('password', password);
+            formData.append('verificationCode', verificationCode);
+            
+            // Добавляем фото профиля, если оно есть
+            if (profilePic) {
+                formData.append('profile_photo', profilePic);
+            }
 
-        // Создаем объект FormData для отправки файла
-        const formData = new FormData();
-        formData.append('nickname', nickname);
-        formData.append('password', password);
-        if (profilePhotoFile) {
-            formData.append('profile_photo', profilePhotoFile);
-        }
+            const response = await fetch('/register', {
+                method: 'POST',
+                body: formData
+            });
 
-        // Отправляем запрос на сервер для регистрации
-        fetch('/register', {
-            method: 'POST',
-            body: formData,
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Показать сообщение об успехе и перейти к форме входа
-                alert('Регистрация успешна! Теперь вы можете войти в систему.');
-                document.getElementById('showLoginLink').click();
+            const data = await response.json();
+
+            if (response.ok) {
+                showMessage('Регистрация успешна!', 'success');
+                setTimeout(() => {
+                    window.location.href = '/main';
+                }, 1000);
             } else {
-                registerError.textContent = data.message || 'Ошибка регистрации';
-                registerError.classList.remove('hidden');
+                showMessage(data.message || 'Ошибка при регистрации', 'error');
             }
-        })
-        .catch(error => {
-            registerError.textContent = 'Ошибка сервера';
-            registerError.classList.remove('hidden');
+        } catch (error) {
             console.error('Error:', error);
-        });
+            showMessage('Сервер недоступен', 'error');
+        }
     });
+
+    // Send verification code
+    sendCodeButton.addEventListener('click', async function (e) {
+        e.preventDefault();
+        const email = document.getElementById('register-email').value;
+
+        if (!email) {
+            showMessage('Сначала введите email адрес', 'error');
+            return;
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+            showMessage('Пожалуйста, введите корректный email адрес', 'error');
+            return;
+        }
+
+        sendCodeButton.textContent = 'Отправка...';
+        sendCodeButton.style.opacity = '0.7';
+        sendCodeButton.style.pointerEvents = 'none';
+
+        try {
+            const response = await fetch('/api/send-verification-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                showMessage('Код подтверждения отправлен на ' + email, 'success');
+                document.getElementById('verification-code').focus();
+
+                let countdown = 60;
+                const countdownInterval = setInterval(() => {
+                    sendCodeButton.textContent = `Повторно через ${countdown}с`;
+                    countdown--;
+
+                    if (countdown < 0) {
+                        clearInterval(countdownInterval);
+                        sendCodeButton.textContent = 'Отправить код';
+                        sendCodeButton.style.opacity = '1';
+                        sendCodeButton.style.pointerEvents = 'auto';
+                    }
+                }, 1000);
+            } else {
+                showMessage(data.detail || 'Ошибка при отправке кода подтверждения', 'error');
+                resetSendCodeButton();
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showMessage('Сервер недоступен', 'error');
+            resetSendCodeButton();
+        }
+    });
+
+    function resetSendCodeButton() {
+        sendCodeButton.textContent = 'Отправить код';
+        sendCodeButton.style.opacity = '1';
+        sendCodeButton.style.pointerEvents = 'auto';
+    }
+
+    function showMessage(text, type) {
+        messageElement.textContent = text;
+        messageElement.style.display = 'block';
+        messageElement.className = 'message ' + type;
+
+        setTimeout(() => {
+            messageElement.style.display = 'none';
+        }, 3000);
+    }
 });
