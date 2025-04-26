@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp AIT - Чат</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="avatar">
+                <img src="{{ url_for('get_user_photo_route') }}" alt="Ваше фото">
+            </div>
+            <div class="menu-button">
+                <span class="material-icons">more_vert</span>
+            </div>
+        </div>
+        <div class="search-container">
+            <span class="search-icon material-icons">search</span>
+            <input type="text" placeholder="Поиск или новый чат" id="chatSearchInput">
+            <div class="action-buttons">
+                <button id="addContactBtn" class="action-btn" title="Добавить контакт">
+                    <span class="material-icons">person_add</span>
+                </button>
+                <button id="createGroupBtn" class="action-btn" title="Создать группу">
+                    <span class="material-icons">group_add</span>
+                </button>
+            </div>
+        </div>
+        <ul class="user-list" id="chatsList">
+            <!-- Список чатов будет заполнен динамически -->
+        </ul>
+    </div>
+    
+    <div class="chat-window">
+        <div class="chat-header">
+            <div class="avatar chat-avatar" id="chatProfilePhoto">
+                <img src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Фото профиля">
+            </div>
+            <div class="user-details">
+                <div class="username" id="chatUsername">Выберите чат</div>
+                <div class="status" id="chatStatus">-</div>
+            </div>
+        </div>
+        
+        <div class="messages" id="messagesContainer">
+            <!-- Сообщения будут загружаться динамически -->
+            <div class="empty-chat-message" id="emptyChatMessage">
+                Выберите чат, чтобы начать общение
+            </div>
+        </div>
+        
+        <div class="input-area" id="messageInputArea">
+            <input type="text" placeholder="Введите сообщение..." id="messageInput">
+            <button id="sendMessageBtn">
+                <span class="material-icons">send</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Модальное окно для поиска пользователей -->
+    <div class="modal" id="searchUserModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Найти пользователя</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-search">
+                <input type="text" id="userSearchInput" placeholder="Введите имя пользователя">
+                <button id="searchUsersBtn">
+                    <span class="material-icons">search</span>
+                </button>
+            </div>
+            <div class="search-results" id="searchResults">
+                <!-- Результаты поиска будут здесь -->
+            </div>
+        </div>
+    </div>
+    
+    <!-- Модальное окно для просмотра профиля -->
+    <div class="modal" id="profileModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Профиль</h3>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="profile-details">
+                <div class="profile-photo">
+                    <img id="profilePhotoLarge" src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Фото профиля">
+                </div>
+                <div class="profile-info">
+                    <h2 id="profileName">Имя пользователя</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно добавления контактов в новом дизайне -->
+    <div class="modal-overlay" id="addContactModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-actions">
+                    <a class="cancel-action" id="cancelAddContact">Отмена</a>
+                    <div class="modal-title">Новый контакт</div>
+                    <a class="save-action" id="confirmAddContact">Сохранить</a>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <input type="text" id="contactFirstName" placeholder="Имя" required>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="contactLastName" placeholder="Фамилия">
+                </div>
+                <div class="form-group contact-input-group">
+                    <span class="material-icons search-icon">search</span>
+                    <input type="text" id="contactSearch" placeholder="Поиск пользователя...">
+                </div>
+                <div class="contact-results" id="contactResults">
+                    <!-- Результаты поиска будут добавлены здесь динамически -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно создания группы в новом дизайне -->
+    <div class="modal-overlay" id="createGroupModal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <div class="modal-actions">
+                    <a class="cancel-action" id="cancelCreateGroup">Отмена</a>
+                    <div class="modal-title">Новая группа</div>
+                    <a class="save-action" id="confirmCreateGroup">Создать</a>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <div class="group-avatar-preview">
+                        <img src="{{ url_for('static', filename='images/default-profile.png') }}" alt="Group Avatar" id="groupAvatarImg">
+                    </div>
+                    <input type="file" id="groupAvatar" style="display: none;" accept="image/*">
+                    <button class="modal-btn btn-cancel" id="changeGroupAvatar">Выбрать аватар</button>
+                </div>
+                <div class="form-group">
+                    <input type="text" id="groupName" placeholder="Название группы" required>
+                </div>
+                <div class="form-group contact-input-group">
+                    <span class="material-icons search-icon">search</span>
+                    <input type="text" id="groupMembers" placeholder="Добавить участников">
+                </div>
+                <div class="selected-members" id="selectedMembers">
+                    <!-- Выбранные пользователи будут добавлены здесь -->
+                </div>
+                <div class="group-members-list" id="groupMembersList">
+                    <!-- Список контактов будет добавлен здесь динамически -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</body>
+</html>
