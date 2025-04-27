@@ -174,4 +174,84 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 1000);
         }
     }
+
+    // Обработчик загрузки фото контакта
+    const contactPhotoInput = document.getElementById('contact-photo-input');
+    const contactPreviewImage = document.getElementById('contact-preview-image');
+    const contactPhotoOverlay = document.querySelector('.contact-photo-container .photo-overlay');
+
+    if (contactPhotoInput && contactPreviewImage && contactPhotoOverlay) {
+        contactPhotoOverlay.addEventListener('click', () => {
+            contactPhotoInput.click();
+        });
+
+        contactPhotoInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    contactPreviewImage.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    // Проверка открытия модального окна
+    const newContactBtn = document.getElementById('new-contact-btn');
+    const newContactModal = document.getElementById('new-contact-modal');
+    const contactSaveBtn = document.getElementById('contact-save-btn');
+    const contactCloseBtn = document.getElementById('contact-modal-close-btn');
+    const contactList = document.querySelector('.chat-list'); // Assuming contact list is in the same container as chats
+
+    if (newContactBtn && newContactModal) {
+        // Open modal
+        newContactBtn.addEventListener('click', () => {
+            newContactModal.classList.add('active');
+        });
+    }
+
+    if (contactCloseBtn && newContactModal) {
+        // Close modal on cancel
+        contactCloseBtn.addEventListener('click', () => {
+            newContactModal.classList.remove('active');
+        });
+    }
+
+    if (contactSaveBtn && contactList) {
+        // Save contact and add to the list
+        contactSaveBtn.addEventListener('click', () => {
+            const firstName = document.getElementById('contact-first-name').value.trim();
+            const lastName = document.getElementById('contact-last-name').value.trim();
+            const email = document.getElementById('contact-email').value.trim();
+
+            if (firstName && lastName && email) {
+                // Create a new contact element
+                const contactItem = document.createElement('div');
+                contactItem.className = 'contact-item';
+                contactItem.innerHTML = `
+                    <div class="contact-avatar">
+                        <img src="/static/images/avatar.png" alt="${firstName} ${lastName}">
+                    </div>
+                    <div class="contact-details">
+                        <div class="contact-name">${firstName} ${lastName}</div>
+                        <div class="contact-email">${email}</div>
+                    </div>
+                `;
+
+                // Append the new contact to the contact list
+                contactList.appendChild(contactItem);
+
+                // Close the modal
+                newContactModal.classList.remove('active');
+
+                // Clear input fields
+                document.getElementById('contact-first-name').value = '';
+                document.getElementById('contact-last-name').value = '';
+                document.getElementById('contact-email').value = '';
+            } else {
+                alert('Пожалуйста, заполните все поля.');
+            }
+        });
+    }
 });

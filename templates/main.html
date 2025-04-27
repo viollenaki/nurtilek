@@ -46,7 +46,8 @@
             
             <div class="user-icons">
                 <div class="user-icon" title="Новый чат" id="new-chat-btn">💬</div>
-                <div class="user-icon" title="Новая группа">👥</div>
+                <div class="user-icon" title="Новый контакт" id="new-contact-btn">👤</div>
+                <div class="user-icon" title="Новая группа" id="new-group-btn">👥</div>
             </div>
             
             <div class="chat-list">
@@ -76,8 +77,6 @@
                         <div class="chat-header-title">Выберите чат</div>
                     </div>
                     <div class="chat-header-actions">
-                        <div class="chat-header-icon">📞</div>
-                        <div class="chat-header-icon">📎</div>
                         <div class="chat-header-icon">⋮</div>
                     </div>
                 </div>
@@ -186,8 +185,7 @@
             </div>
         </div>
     </div>
-</body>
-</html>    <div class="modal-overlay" id="create-group-modal">
+    <div class="modal-overlay" id="create-group-modal">
 
         <div class="modal-content">
             <div class="modal-header">
@@ -240,5 +238,47 @@
             </div>
         </div>
     </div>
+
+    <div class="modal-overlay" id="new-contact-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <button class="modal-btn cancel-btn" id="contact-modal-close-btn">Отмена</button>
+            <div class="modal-title">Добавить новый контакт</div>
+            <button class="modal-btn save-btn" id="contact-save-btn">Сохранить</button>
+        </div>
+        <div class="modal-body">
+            <div class="contact-edit-container">
+                <div class="contact-photo-container">
+                    <div class="profile-photo">
+                        <img src="/static/images/avatar.png" alt="Фото контакта" id="contact-preview-image">
+                        <div class="photo-overlay">
+                            <span class="photo-upload-icon">📷</span>
+                        </div>
+                        <input type="file" id="contact-photo-input" accept="image/*" style="display: none;">
+                    </div>
+                    <div class="photo-caption">Фото контакта</div>
+                </div>
+                
+                <div class="contact-fields">
+                    <div class="form-group">
+                        <label for="contact-first-name">Имя</label>
+                        <input type="text" id="contact-first-name" class="input-field" placeholder="Введите имя" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="contact-last-name">Фамилия</label>
+                        <input type="text" id="contact-last-name" class="input-field" placeholder="Введите фамилию" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="contact-email">Email</label>
+                        <input type="email" id="contact-email" class="input-field" placeholder="Введите email" required>
+                    </div>
+                </div>
+            </div>
+            <div id="contact-message" class="modal-message"></div>
+        </div>
+    </div>
+</div>
 </body>
 </html>
