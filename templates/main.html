@@ -108,6 +108,7 @@
             font-weight: bold;
             margin-right: 10px;
             overflow: hidden;
+            cursor: pointer;
         }
 
         .user-avatar img {
@@ -519,13 +520,152 @@
             color: var(--icon-color);
             display: none;
         }
+
+        /* Стили для модального окна редактирования профиля */
+        .profile-edit-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .profile-photo-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .profile-photo {
+            position: relative;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            overflow: hidden;
+            cursor: pointer;
+            background-color: var(--user-icon-bg);
+        }
+
+        .profile-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .profile-photo:hover .photo-overlay {
+            opacity: 1;
+        }
+
+        .photo-upload-icon {
+            color: white;
+            font-size: 36px;
+        }
+
+        .photo-caption {
+            font-size: 14px;
+            color: var(--icon-color);
+        }
+
+        .profile-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .input-field {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            background-color: var(--search-bg);
+            font-size: 15px;
+            color: var(--text-color);
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary-color);
+        }
+
+        .divider {
+            border: 0;
+            height: 1px;
+            background-color: rgba(0, 0, 0, 0.1);
+            margin: 5px 0;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-color);
+            margin: 5px 0;
+        }
+
+        .password-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .modal-message {
+            padding: 10px;
+            margin-top: 15px;
+            border-radius: 5px;
+            text-align: center;
+            font-size: 14px;
+            display: none;
+        }
+
+        .modal-message.success {
+            background-color: rgba(46, 213, 115, 0.2);
+            color: #2ed573;
+        }
+
+        .modal-message.error {
+            background-color: rgba(255, 71, 87, 0.2);
+            color: #ff4757;
+        }
+
+        .save-btn {
+            color: var(--primary-color);
+            font-weight: 500;
+        }
     </style>
+    <script src="/static/js/userSearch.js" defer></script>
 </head>
 <body class="light-theme">
     <div class="bg-wrapper"></div>
     <div class="sidebar">
         <div class="user-info">
-            <div class="user-avatar">
+            <div class="user-avatar" id="profile-photo-btn">
                 <img src="/api/user/photo?t={{ timestamp }}" alt="{{ username }}" id="userProfileImage" onerror="this.src='/static/images/avatar.png'">
             </div>
             <div class="user-details">
@@ -585,6 +725,65 @@
                 <div class="search-results" id="search-results">
                     <div class="no-results">Введите имя пользователя для поиска</div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для редактирования профиля -->
+    <div class="modal-overlay" id="edit-profile-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="profile-modal-close-btn">Отмена</button>
+                <div class="modal-title">Редактировать профиль</div>
+                <button class="modal-btn save-btn" id="profile-save-btn">Сохранить</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-edit-container">
+                    <div class="profile-photo-container">
+                        <div class="profile-photo">
+                            <img src="/api/user/photo?t={{ timestamp }}" alt="{{ username }}" id="profile-preview-image" onerror="this.src='/static/images/avatar.png'">
+                            <div class="photo-overlay">
+                                <span class="photo-upload-icon">📷</span>
+                            </div>
+                            <input type="file" id="profile-photo-input" accept="image/*" style="display: none;">
+                        </div>
+                        <div class="photo-caption">Добавить фото</div>
+                    </div>
+                    
+                    <div class="profile-fields">
+                        <div class="form-group">
+                            <label for="profile-nickname">Имя пользователя</label>
+                            <input type="text" id="profile-nickname" class="input-field" value="{{ username }}" placeholder="Имя пользователя">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="profile-email">Email</label>
+                            <input type="email" id="profile-email" class="input-field" placeholder="Email">
+                        </div>
+                        
+                        <hr class="divider">
+                        
+                        <div class="password-section">
+                            <div class="section-title">Изменить пароль</div>
+                            
+                            <div class="form-group">
+                                <label for="current-password">Текущий пароль</label>
+                                <input type="password" id="current-password" class="input-field" placeholder="Введите текущий пароль">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="new-password">Новый пароль</label>
+                                <input type="password" id="new-password" class="input-field" placeholder="Введите новый пароль">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="confirm-password">Подтверждение пароля</label>
+                                <input type="password" id="confirm-password" class="input-field" placeholder="Подтвердите новый пароль">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="profile-message" class="modal-message"></div>
             </div>
         </div>
     </div>
@@ -698,108 +897,210 @@
             }
         });
         
-        // Поиск пользователей при вводе
-        let searchTimeout;
-        userSearchInput.addEventListener('input', function() {
-            const query = this.value.trim();
-            
-            // Очищаем предыдущий таймер
-            clearTimeout(searchTimeout);
-            
-            // Если запрос пустой, показываем сообщение
-            if (query.length === 0) {
-                searchResults.innerHTML = '<div class="no-results">Введите имя пользователя для поиска</div>';
-                return;
-            }
-            
-            // Если запрос слишком короткий, не выполняем поиск
-            if (query.length < 2) {
-                searchResults.innerHTML = '<div class="no-results">Введите минимум 2 символа</div>';
-                return;
-            }
-            
-            // Устанавливаем таймер для предотвращения частых запросов
-            searchTimeout = setTimeout(async function() {
-                // Показываем индикатор загрузки
-                searchLoading.style.display = 'block';
-                searchResults.style.display = 'none';
-                
-                try {
-                    const response = await fetch(`/api/user/search?query=${encodeURIComponent(query)}`);
-                    const data = await response.json();
-                    
-                    // Скрываем индикатор загрузки
-                    searchLoading.style.display = 'none';
-                    searchResults.style.display = 'block';
-                    
-                    if (!data.success) {
-                        searchResults.innerHTML = `<div class="no-results">Ошибка: ${data.message}</div>`;
-                        return;
-                    }
-                    
-                    if (data.users.length === 0) {
-                        searchResults.innerHTML = '<div class="no-results">Пользователи не найдены</div>';
-                        return;
-                    }
-                    
-                    // Отображаем результаты поиска
-                    let resultsHTML = '';
-                    data.users.forEach(user => {
-                        resultsHTML += `
-                            <div class="user-item" data-user-id="${user.id}" data-nickname="${user.nickname}">
-                                <div class="user-avatar-small">
-                                    <img src="/api/user/photo/${user.id}" onerror="this.src='/static/images/avatar.png'" alt="${user.nickname}">
-                                </div>
-                                <div class="user-info-compact">
-                                    <div class="user-name-compact">${user.nickname}</div>
-                                    <div class="user-email-compact">ID: ${user.id}</div>
-                                </div>
-                            </div>
-                        `;
-                    });
-                    searchResults.innerHTML = resultsHTML;
-                    
-                    // Добавляем обработчики событий для каждого пользователя
-                    document.querySelectorAll('.user-item').forEach(item => {
-                        item.addEventListener('click', async function() {
-                            const userId = this.dataset.userId;
-                            const nickname = this.dataset.nickname;
-                            
-                            try {
-                                // Создаем чат с выбранным пользователем
-                                const response = await fetch('/api/chat/create_dialog', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json'
-                                    },
-                                    body: JSON.stringify({ user_id: userId })
-                                });
-                                
-                                const data = await response.json();
-                                
-                                if (data.success) {
-                                    alert(`Чат с пользователем ${nickname} успешно создан!`);
-                                    closeModal();
-                                    // В реальном приложении здесь нужно будет перенаправить на страницу чата
-                                    // или обновить список чатов
-                                    location.reload();  // Временное решение - перезагрузка страницы
-                                } else {
-                                    alert(`Ошибка: ${data.message}`);
-                                }
-                            } catch (error) {
-                                console.error('Error creating chat:', error);
-                                alert('Произошла ошибка при создании чата');
-                            }
+        // Инициализация функционала поиска пользователей
+        document.addEventListener('DOMContentLoaded', function() {
+            initUserSearch({
+                searchInput: userSearchInput,
+                resultsContainer: searchResults,
+                loadingIndicator: searchLoading,
+                onUserSelected: async function(userData) {
+                    try {
+                        // Создаем чат с выбранным пользователем
+                        const response = await fetch('/api/chat/create_dialog', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ user_id: userData.id })
                         });
-                    });
-                    
-                } catch (error) {
-                    console.error('Error searching users:', error);
-                    searchLoading.style.display = 'none';
-                    searchResults.style.display = 'block';
-                    searchResults.innerHTML = '<div class="no-results">Ошибка при выполнении поиска</div>';
+                        
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            alert(`Чат с пользователем ${userData.nickname} успешно создан!`);
+                            closeModal();
+                            // В реальном приложении здесь нужно будет перенаправить на страницу чата
+                            // или обновить список чатов
+                            location.reload();  // Временное решение - перезагрузка страницы
+                        } else {
+                            alert(`Ошибка: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('Error creating chat:', error);
+                        alert('Произошла ошибка при создании чата');
+                    }
                 }
-            }, 500);
+            });
+        });
+
+        // Профиль пользователя
+        const profilePhotoBtn = document.getElementById('profile-photo-btn');
+        const editProfileModal = document.getElementById('edit-profile-modal');
+        const profileModalCloseBtn = document.getElementById('profile-modal-close-btn');
+        const profileSaveBtn = document.getElementById('profile-save-btn');
+        const profilePhotoInput = document.getElementById('profile-photo-input');
+        const profilePreviewImage = document.getElementById('profile-preview-image');
+        const profilePhotoContainer = document.querySelector('.profile-photo');
+        const profileMessage = document.getElementById('profile-message');
+        
+        // Открытие модального окна редактирования профиля
+        function openProfileModal() {
+            editProfileModal.classList.add('active');
+            // Загружаем текущие данные пользователя
+            fetchUserData();
+        }
+        
+        // Закрытие модального окна редактирования профиля
+        function closeProfileModal() {
+            editProfileModal.classList.remove('active');
+            // Очищаем поля и сообщения
+            document.getElementById('current-password').value = '';
+            document.getElementById('new-password').value = '';
+            document.getElementById('confirm-password').value = '';
+            if (profileMessage) profileMessage.textContent = '';
+            if (profileMessage) profileMessage.style.display = 'none';
+        }
+        
+        // Получение данных пользователя
+        async function fetchUserData() {
+            try {
+                const response = await fetch('/api/user/me');
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Заполняем поля данными пользователя
+                    document.getElementById('profile-nickname').value = data.user.nickname;
+                    if (data.user.email) {
+                        document.getElementById('profile-email').value = data.user.email;
+                    }
+                    
+                    // Обновляем фото профиля
+                    const timestamp = new Date().getTime();
+                    profilePreviewImage.src = `/api/user/photo?t=${timestamp}`;
+                } else {
+                    showProfileMessage('Не удалось загрузить данные профиля', 'error');
+                }
+            } catch (error) {
+                console.error('Error fetching user data:', error);
+                showProfileMessage('Ошибка при загрузке данных профиля', 'error');
+            }
+        }
+        
+        // Отображение сообщений в модальном окне профиля
+        function showProfileMessage(message, type = 'success') {
+            if (!profileMessage) return;
+            
+            profileMessage.textContent = message;
+            profileMessage.className = 'modal-message ' + type;
+            profileMessage.style.display = 'block';
+            
+            setTimeout(() => {
+                profileMessage.style.display = 'none';
+            }, 3000);
+        }
+        
+        // Обработчик кнопки сохранения профиля
+        profileSaveBtn?.addEventListener('click', async function() {
+            // Получаем значения полей
+            const nickname = document.getElementById('profile-nickname').value;
+            const email = document.getElementById('profile-email').value;
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            
+            // Проверяем обязательные поля
+            if (!nickname) {
+                showProfileMessage('Имя пользователя обязательно', 'error');
+                return;
+            }
+            
+            // Проверяем совпадение паролей
+            if (newPassword && newPassword !== confirmPassword) {
+                showProfileMessage('Пароли не совпадают', 'error');
+                return;
+            }
+            
+            // Проверяем длину пароля
+            if (newPassword && newPassword.length < 6) {
+                showProfileMessage('Пароль должен содержать не менее 6 символов', 'error');
+                return;
+            }
+            
+            try {
+                // Создаем FormData для отправки данных и файла
+                const formData = new FormData();
+                formData.append('nickname', nickname);
+                if (email) formData.append('email', email);
+                
+                // Добавляем пароли, если они заполнены
+                if (currentPassword && newPassword) {
+                    formData.append('current_password', currentPassword);
+                    formData.append('new_password', newPassword);
+                }
+                
+                // Добавляем фото, если оно выбрано
+                const photoInput = document.getElementById('profile-photo-input');
+                if (photoInput.files && photoInput.files[0]) {
+                    formData.append('profile_photo', photoInput.files[0]);
+                }
+                
+                // Отправляем данные на сервер
+                const response = await fetch('/api/user/update_profile', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showProfileMessage('Профиль успешно обновлен', 'success');
+                    
+                    // Обновляем отображаемое имя пользователя
+                    document.querySelector('.user-name').textContent = nickname;
+                    
+                    // Обновляем фото профиля
+                    updateProfileImage();
+                    
+                    // Закрываем модальное окно через небольшую задержку
+                    setTimeout(() => {
+                        closeProfileModal();
+                    }, 1500);
+                } else {
+                    showProfileMessage(data.message || 'Ошибка при обновлении профиля', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating profile:', error);
+                showProfileMessage('Произошла ошибка при обновлении профиля', 'error');
+            }
+        });
+        
+        // Обработчик клика на фото профиля
+        profilePhotoBtn?.addEventListener('click', openProfileModal);
+        profileModalCloseBtn?.addEventListener('click', closeProfileModal);
+        
+        // Закрытие модального окна при клике вне его содержимого
+        editProfileModal?.addEventListener('click', function(event) {
+            if (event.target === editProfileModal) {
+                closeProfileModal();
+            }
+        });
+        
+        // Обработка выбора фото
+        profilePhotoContainer?.addEventListener('click', function() {
+            profilePhotoInput.click();
+        });
+        
+        // Предварительный просмотр выбранного фото
+        profilePhotoInput?.addEventListener('change', function(event) {
+            if (event.target.files && event.target.files[0]) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    profilePreviewImage.src = e.target.result;
+                }
+                
+                reader.readAsDataURL(event.target.files[0]);
+            }
         });
     </script>
 </body>

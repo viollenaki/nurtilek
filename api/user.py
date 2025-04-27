@@ -231,23 +231,72 @@ def search_users():
         return jsonify({"success": False, "message": "Не авторизован"}), 401
     
     query = request.args.get('query', '')
-    if len(query) < 3:
-        return jsonify({"success": False, "message": "Запрос должен содержать минимум 3 символа"}), 400
+    
+    # Проверка минимальной длины запроса
+    if len(query) < 2:
+        return jsonify({
+            "success": False, 
+            "message": "Запрос должен содержать минимум 2 символа"
+        }), 400
+    
+    # Получаем лимит и смещение для пагинации
+    limit = request.args.get('limit', 20, type=int)
+    offset = request.args.get('offset', 0, type=int)
     
     conn = get_db_connection()
+    
+    # Добавляем более гибкий поиск по никнейму
+    # Сначала ищем пользователей, у которых никнейм начинается с запроса
+    # Затем тех, у кого запрос встречается в середине никнейма
+    # Исключаем текущего пользователя из результатов поиска
     users = conn.execute('''
-        SELECT id, nickname, created_at 
+        SELECT id, nickname, email, created_at 
         FROM users 
-        WHERE nickname LIKE ? AND id != ?
-        ORDER BY nickname
-        LIMIT 20
-    ''', (f"%{query}%", session.get('user_id'))).fetchall()
+        WHERE (
+            nickname LIKE ? OR 
+            nickname LIKE ? OR
+            nickname LIKE ?
+        ) AND id != ?
+        ORDER BY 
+            CASE 
+                WHEN nickname LIKE ? THEN 1
+                WHEN nickname LIKE ? THEN 2
+                ELSE 3
+            END,
+            nickname
+        LIMIT ? OFFSET ?
+    ''', (
+        f"{query}%",      # начинается с запроса
+        f"% {query}%",    # содержит запрос после пробела
+        f"%{query}%",     # содержит запрос где угодно
+        session.get('user_id'),
+        f"{query}%",      # приоритет для начинающихся с запроса
+        f"% {query}%",    # приоритет для слов, начинающихся с запроса
+        limit,
+        offset
+    )).fetchall()
+    
+    total_count = conn.execute('''
+        SELECT COUNT(*) as count
+        FROM users 
+        WHERE (
+            nickname LIKE ? OR 
+            nickname LIKE ? OR
+            nickname LIKE ?
+        ) AND id != ?
+    ''', (
+        f"{query}%", 
+        f"% {query}%", 
+        f"%{query}%",
+        session.get('user_id')
+    )).fetchone()['count']
     
     results = []
     for user in users:
         results.append({
             "id": user['id'],
             "nickname": user['nickname'],
+            "email": user['email'] if 'email' in user.keys() else None,
             "created_at": user['created_at'],
             "has_profile_photo": is_profile_photo_exists(user['id'])
         })
@@ -255,7 +304,9 @@ def search_users():
     conn.close()
     return jsonify({
         "success": True,
-        "users": results
+        "users": results,
+        "total": total_count,
+        "has_more": total_count > offset + len(results)
     })
 
 def is_profile_photo_exists(user_id):
