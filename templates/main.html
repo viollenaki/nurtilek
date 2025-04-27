@@ -8,9 +8,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
     <script src="{{ url_for('static', filename='js/userSearch.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/newChat.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/profile.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='js/chat.js') }}" defer></script>
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 </head>
 <body class="light-theme">
@@ -55,6 +57,42 @@
         <div class="chat-title">WhatsappAIT</div>
         <div class="chat-subtitle">Выберите контакт из списка чатов или создайте новый чат для начала общения</div>
         <button class="action-button" id="new-chat-main-btn">Начать новый чат</button>
+    </div>
+    
+    <!-- Интерфейс чата -->
+    <div id="chat-interface">
+        <div class="chat-header">
+            <div id="back-to-chats">←</div>
+            <div class="chat-header-info">
+                <div class="chat-header-avatar">
+                    <img src="/static/images/avatar.png" alt="avatar" id="chat-avatar">
+                </div>
+                <div class="chat-header-title">Имя чата</div>
+            </div>
+            <div class="chat-header-actions">
+                <div class="chat-header-icon">📞</div>
+                <div class="chat-header-icon">📎</div>
+                <div class="chat-header-icon">⋮</div>
+            </div>
+        </div>
+        
+        <div class="messages-container">
+            <!-- Сообщения будут добавляться здесь -->
+        </div>
+        
+        <div class="message-form-container">
+            <div class="selected-file">
+                <!-- Информация о выбранном файле будет здесь -->
+            </div>
+            <form id="message-form">
+                <button type="button" id="attach-file">📎</button>
+                <input type="file" id="file-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                <div class="message-input-container">
+                    <textarea id="message-input" placeholder="Введите сообщение..."></textarea>
+                </div>
+                <button type="button" id="send-message-btn">➤</button>
+            </form>
+        </div>
     </div>
 
     <!-- Модальное окно для поиска пользователей -->

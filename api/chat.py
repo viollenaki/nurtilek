@@ -299,9 +299,10 @@ def get_chat_messages(chat_id):
     
     current_user_id = session.get('user_id')
     
-    # Получаем параметры пагинации
+    # Получаем параметры запроса
     limit = request.args.get('limit', 20, type=int)
     offset = request.args.get('offset', 0, type=int)
+    after_id = request.args.get('after_id', None, type=int)  # ID сообщения, после которого нужны новые
     
     conn = get_db_connection()
     
@@ -331,8 +332,8 @@ def get_chat_messages(chat_id):
         conn.close()
         return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
     
-    # Получаем сообщения
-    messages = conn.execute('''
+    # Строим базовую часть запроса
+    base_query = '''
         SELECT m.id, m.content, m.sender_id, u.nickname as sender_name,
                m.timestamp, m.is_edited, m.edited_at, 
                m.reply_to, m.media_type, m.forwarded_from,
@@ -340,9 +341,25 @@ def get_chat_messages(chat_id):
         FROM messages m
         JOIN users u ON m.sender_id = u.id
         WHERE m.chat_id = ?
-        ORDER BY m.timestamp DESC
-        LIMIT ? OFFSET ?
-    ''', (chat_id, limit, offset)).fetchall()
+    '''
+    
+    params = [chat_id]
+    
+    # Модификация запроса в зависимости от параметров
+    if after_id:
+        # Получаем только новые сообщения после определенного ID
+        base_query += ' AND m.id > ?'
+        params.append(after_id)
+        
+        # Сортируем по времени (новейшие сверху)
+        base_query += ' ORDER BY m.timestamp DESC'
+    else:
+        # Стандартный запрос с пагинацией
+        base_query += ' ORDER BY m.timestamp DESC LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+    
+    # Выполняем запрос
+    messages = conn.execute(base_query, params).fetchall()
     
     # Преобразуем результаты в удобный формат
     messages_list = []
@@ -399,14 +416,15 @@ def get_chat_messages(chat_id):
             "is_own": message['sender_id'] == current_user_id
         })
     
-    # Отмечаем сообщения как прочитанные
-    for message in messages:
-        # Не отмечаем собственные сообщения
-        if message['sender_id'] != current_user_id:
-            conn.execute('''
-                INSERT OR IGNORE INTO message_reads (message_id, user_id)
-                VALUES (?, ?)
-            ''', (message['id'], current_user_id))
+    # Отмечаем сообщения как прочитанные (только если это не запрос новых сообщений)
+    if not after_id:
+        for message in messages:
+            # Не отмечаем собственные сообщения
+            if message['sender_id'] != current_user_id:
+                conn.execute('''
+                    INSERT OR IGNORE INTO message_reads (message_id, user_id)
+                    VALUES (?, ?)
+                ''', (message['id'], current_user_id))
     
     conn.commit()
     conn.close()
@@ -415,48 +433,44 @@ def get_chat_messages(chat_id):
         "success": True,
         "messages": messages_list,
         "total": len(messages_list),
-        "has_more": len(messages_list) == limit
+        "has_more": len(messages_list) == limit and not after_id  # has_more имеет смысл только при пагинации
     })
 
-@chat_bp.route('/api/chat/<int:chat_id>/send_message', methods=['POST'])
-def send_message(chat_id):
-    """Send a new message to a chat"""
+@chat_bp.route('/api/chat/media/<int:message_id>', methods=['GET'])
+def get_message_media(message_id):
+    """Get media content from a specific message"""
     if 'user_id' not in session:
         return jsonify({"success": False, "message": "Не авторизован"}), 401
     
     current_user_id = session.get('user_id')
     
-    # Проверяем, пришли ли данные в JSON или form-data
-    if request.is_json:
-        data = request.get_json()
-        content = data.get('content')
-        reply_to = data.get('reply_to')
-        forwarded_from = data.get('forwarded_from')
-    else:
-        content = request.form.get('content')
-        reply_to = request.form.get('reply_to')
-        forwarded_from = request.form.get('forwarded_from')
-        
-    if not content and 'media' not in request.files:
-        return jsonify({"success": False, "message": "Сообщение не может быть пустым"}), 400
-    
     conn = get_db_connection()
     
-    # Проверяем, имеет ли пользователь доступ к чату
-    access = False
+    # Получаем информацию о сообщении и проверяем доступ
+    message_info = conn.execute('''
+        SELECT m.media_content, m.media_type, m.chat_id
+        FROM messages m
+        WHERE m.id = ?
+    ''', (message_id,)).fetchone()
     
-    # Проверяем, является ли это личным диалогом пользователя
+    if not message_info or not message_info['media_content']:
+        conn.close()
+        return jsonify({"success": False, "message": "Медиафайл не найден"}), 404
+    
+    # Проверяем доступ к чату
+    chat_id = message_info['chat_id']
+    
+    # Проверяем доступ - такой же код, как в get_chat_messages
+    access = False
     dialog = conn.execute('''
-        SELECT id FROM dialogs
-        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+        SELECT id FROM dialogs WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
     ''', (chat_id, current_user_id, current_user_id)).fetchone()
     
     if dialog:
         access = True
     else:
-        # Проверяем, является ли пользователь участником группового чата
         group = conn.execute('''
-            SELECT gc.id FROM group_chats gc
+            SELECT gc.id FROM group_chats gc 
             JOIN group_members gm ON gc.id = gm.group_chat_id
             WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
         ''', (chat_id, current_user_id)).fetchone()
@@ -466,69 +480,24 @@ def send_message(chat_id):
     
     if not access:
         conn.close()
-        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+        return jsonify({"success": False, "message": "Нет доступа к файлу"}), 403
     
-    # Обработка медиафайла, если есть
-    media_content = None
-    media_type = None
+    # Определяем тип файла для правильного MIME-типа
+    media_type = message_info['media_type']
+    mime_type = 'application/octet-stream'  # По умолчанию
     
-    if 'media' in request.files:
-        media_file = request.files['media']
-        if media_file.filename:
-            media_content = media_file.read()
-            # Определяем тип медиа по расширению файла
-            ext = os.path.splitext(media_file.filename)[1].lower()
-            if ext in ['.jpg', '.jpeg', '.png', '.gif']:
-                media_type = 'image'
-            elif ext in ['.mp4', '.avi', '.mov']:
-                media_type = 'video'
-            elif ext in ['.mp3', '.wav', '.ogg']:
-                media_type = 'audio'
-            else:
-                media_type = 'file'
+    if media_type == 'image':
+        mime_type = 'image/jpeg'
+    elif media_type == 'video':
+        mime_type = 'video/mp4'
+    elif media_type == 'audio':
+        mime_type = 'audio/mpeg'
     
-    try:
-        # Создаем новое сообщение
-        conn.execute('''
-            INSERT INTO messages (
-                chat_id, sender_id, content, 
-                media_content, media_type, 
-                reply_to, forwarded_from
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            chat_id, current_user_id, content, 
-            media_content, media_type, 
-            reply_to, forwarded_from
-        ))
-        
-        message_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-        
-        # Получаем информацию о созданном сообщении
-        message = conn.execute('''
-            SELECT m.id, m.content, m.sender_id, u.nickname as sender_name,
-                m.timestamp, m.media_type
-            FROM messages m
-            JOIN users u ON m.sender_id = u.id
-            WHERE m.id = ?
-        ''', (message_id,)).fetchone()
-        
-        conn.commit()
-        conn.close()
-        
-        return jsonify({
-            "success": True,
-            "message": {
-                "id": message['id'],
-                "content": message['content'],
-                "sender_id": message['sender_id'],
-                "sender_name": message['sender_name'],
-                "timestamp": message['timestamp'],
-                "media_type": message['media_type'],
-                "has_media": message['media_type'] is not None
-            }
-        })
-        
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        return jsonify({"success": False, "message": f"Ошибка при отправке сообщения: {str(e)}"}), 500
+    conn.close()
+    
+    # Возвращаем медиафайл
+    return send_file(
+        BytesIO(message_info['media_content']),
+        mimetype=mime_type,
+        as_attachment=False
+    )

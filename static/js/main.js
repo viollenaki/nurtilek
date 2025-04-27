@@ -35,8 +35,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функционал мобильного меню
     if (window.innerWidth <= 768) {
         const sidebar = document.querySelector('.sidebar');
-        sidebar.addEventListener('click', function() {
-            this.classList.toggle('expanded');
+        sidebar.addEventListener('click', function(e) {
+            // Предотвращаем схлопывание при нажатии на элементы внутри
+            if (e.target === this || e.target.closest('.user-info')) {
+                this.classList.toggle('expanded');
+            }
         });
     }
 
@@ -44,8 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const actionButton = document.querySelector('.action-button');
     if (actionButton) {
         actionButton.addEventListener('click', function() {
-            // Здесь будет логика создания нового чата
-            // В данном случае просто переадресуем на обработчик кнопки "новый чат"
+            // Открываем модальное окно для выбора пользователя
             const newChatMainBtn = document.getElementById('new-chat-main-btn');
             if (newChatMainBtn) {
                 newChatMainBtn.click();
@@ -80,6 +82,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (refreshIcon) {
         refreshIcon.addEventListener('click', function() {
             updateProfileImage();
+            // Также обновляем список чатов
+            if (window.chatModule) {
+                window.chatModule.updateChatsList();
+            }
         });
     }
 
@@ -88,7 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchResults = document.getElementById('search-results');
     const searchLoading = document.getElementById('search-loading');
 
-    if (userSearchInput && searchResults) {
+    if (typeof initUserSearch === 'function' && userSearchInput && searchResults) {
         initUserSearch({
             searchInput: userSearchInput,
             resultsContainer: searchResults,
@@ -107,11 +113,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     const data = await response.json();
                     
                     if (data.success) {
-                        alert(`Чат с пользователем ${userData.nickname} успешно создан!`);
-                        closeModal();
-                        // В реальном приложении здесь нужно будет перенаправить на страницу чата
-                        // или обновить список чатов
-                        location.reload();  // Временное решение - перезагрузка страницы
+                        // Закрываем модальное окно
+                        const modalOverlay = document.getElementById('new-chat-modal');
+                        if (modalOverlay) {
+                            modalOverlay.classList.remove('active');
+                        }
+                        
+                        // Обновляем список чатов
+                        if (window.chatModule) {
+                            await window.chatModule.updateChatsList();
+                            
+                            // Открываем созданный чат
+                            window.chatModule.openChat(
+                                data.chat_id, 
+                                'dialog',
+                                userData.nickname
+                            );
+                        } else {
+                            // Если модуль чата не инициализирован, просто перезагружаем страницу
+                            location.reload();
+                        }
                     } else {
                         alert(`Ошибка: ${data.message}`);
                     }
@@ -121,5 +142,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+    }
+    
+    // Инициализация компонента чата
+    if (window.chatModule && typeof window.chatModule.initChatComponent === 'function') {
+        window.chatModule.initChatComponent();
     }
 });
