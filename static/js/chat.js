@@ -92,7 +92,8 @@ function startChatUpdates() {
             // Страница стала видимой - немедленно обновляем данные
             updateChatsList();
             if (currentChatId) {
-                updateCurrentChatMessages();
+                // При возвращении на страницу делаем полную перезагрузку сообщений
+                loadChatMessages(currentChatId);
             }
         }
     });
@@ -229,8 +230,15 @@ function formatMessageTime(date) {
 
 // Открытие чата для просмотра и отправки сообщений
 function openChat(chatId, chatType, chatName) {
+    // Очищаем предыдущий интервал обновления, если он был
+    if (activeChatlUpdateInterval) {
+        clearInterval(activeChatlUpdateInterval);
+        activeChatlUpdateInterval = null;
+    }
+    
     // Сохраняем ID текущего чата
     currentChatId = chatId;
+    lastMessageId = null; // Сбрасываем ID последнего сообщения
     
     // Сохраняем информацию о чате в localStorage
     localStorage.setItem('lastChatId', chatId);
@@ -273,6 +281,27 @@ function openChat(chatId, chatType, chatName) {
     
     // Фокусируемся на поле ввода
     document.getElementById('message-input').focus();
+    
+    // Устанавливаем интервал только для инкрементального обновления сообщений
+    activeChatlUpdateInterval = setInterval(() => {
+        updateCurrentChatMessages();
+    }, 1000);
+    
+    // Делаем полное обновление сообщений реже (каждые 30 секунд)
+    // чтобы избежать мерцания от слишком частой полной перезагрузки
+    setTimeout(() => {
+        if (currentChatId === chatId) {
+            setInterval(() => {
+                if (currentChatId === chatId && !isUpdatingMessages) {
+                    console.log("Выполняем периодическое полное обновление сообщений...");
+                    // Используем специальный флаг для предотвращения мерцания
+                    loadChatMessages(currentChatId, 0, true);
+                }
+            }, 30000); // Раз в 30 секунд
+        }
+    }, 10000); // Первое полное обновление через 10 секунд после открытия чата
+    
+    console.log("Настроены интервалы обновления сообщений для чата ID:", chatId);
 }
 
 // Получить текущий ID чата
@@ -282,6 +311,12 @@ function getCurrentChatId() {
 
 // Закрытие текущего чата
 function closeCurrentChat() {
+    // Очищаем интервал обновления сообщений
+    if (activeChatlUpdateInterval) {
+        clearInterval(activeChatlUpdateInterval);
+        activeChatlUpdateInterval = null;
+    }
+    
     currentChatId = null;
     lastMessageId = null;
     document.querySelector('.messages-container').innerHTML = '<div class="no-chat-selected">Выберите чат, чтобы начать общение</div>';
@@ -332,16 +367,19 @@ function hideMainContent() {
 }
 
 // Загрузка сообщений чата
-async function loadChatMessages(chatId, offset = 0) {
+async function loadChatMessages(chatId, offset = 0, silentUpdate = false) {
     try {
         const messagesContainer = document.querySelector('.messages-container');
         
-        if (offset === 0) {
-            // При первой загрузке сообщений показываем индикатор загрузки
+        // При первой загрузке или явном запросе на обновление показываем индикатор загрузки
+        if (offset === 0 && !silentUpdate) {
             messagesContainer.innerHTML = '<div class="loading-messages">Загрузка сообщений...</div>';
         }
         
-        const response = await fetch(`/api/chat/${chatId}/messages?offset=${offset}&limit=20`);
+        // Добавляем временную метку для предотвращения кэширования
+        const timestamp = new Date().getTime();
+        
+        const response = await fetch(`/api/chat/${chatId}/messages?offset=${offset}&limit=50&t=${timestamp}`);
         if (!response.ok) {
             throw new Error('Ошибка загрузки сообщений');
         }
@@ -349,46 +387,120 @@ async function loadChatMessages(chatId, offset = 0) {
         const data = await response.json();
         
         if (data.success) {
-            if (offset === 0) {
-                messagesContainer.innerHTML = ''; // Очищаем контейнер
+            // Сохраняем текущую позицию прокрутки
+            const scrollPos = messagesContainer.scrollTop;
+            const wasAtBottom = isScrolledToBottom(messagesContainer);
+            
+            // Обновляем только при первой загрузке или при обычном (не тихом) обновлении
+            if ((offset === 0 && !silentUpdate) || !data.messages || data.messages.length === 0) {
+                messagesContainer.innerHTML = '';
             }
             
             // Проверяем, есть ли сообщения
             if (data.messages.length === 0 && offset === 0) {
-                messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений</div>';
+                if (!silentUpdate) {
+                    messagesContainer.innerHTML = '<div class="no-messages">Нет сообщений</div>';
+                }
                 return;
             }
             
             // Запоминаем ID последнего сообщения для последующих обновлений
             if (data.messages.length > 0) {
-                const latestMessage = data.messages[0];
-                lastMessageId = latestMessage.id;
-            }
-            
-            // Обрабатываем полученные сообщения
-            const messagesHTML = data.messages
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)) // Сортировка по времени
-                .map(message => createMessageElement(message))
-                .join('');
-            
-            if (offset === 0) {
-                messagesContainer.innerHTML = messagesHTML;
-            } else {
-                // При подгрузке добавляем сообщения в начало
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = messagesHTML;
-                while (tempDiv.firstChild) {
-                    messagesContainer.prepend(tempDiv.firstChild);
+                // Ищем сообщение с максимальным ID
+                const messageIds = data.messages.map(m => m.id).filter(id => typeof id === 'number');
+                if (messageIds.length > 0) {
+                    const maxId = Math.max(...messageIds);
+                    // Обновляем lastMessageId только если новое значение больше текущего
+                    if (!lastMessageId || maxId > lastMessageId) {
+                        lastMessageId = maxId;
+                        console.log(`Установлен lastMessageId: ${lastMessageId}`);
+                    }
                 }
             }
             
-            // Прокручиваем к последнему сообщению при первой загрузке
-            if (offset === 0) {
+            // При тихом обновлении проверяем и обновляем только новые сообщения
+            if (silentUpdate) {
+                data.messages.forEach(message => {
+                    // Проверяем, существует ли уже это сообщение
+                    const existingMessage = document.querySelector(`.message[data-message-id="${message.id}"]`);
+                    if (!existingMessage) {
+                        // Создаем элемент для нового сообщения
+                        const messageHTML = createMessageElement(message);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = messageHTML;
+                        
+                        if (tempDiv.firstChild) {
+                            // Вставляем новое сообщение в соответствующее место
+                            let inserted = false;
+                            
+                            // Находим правильную позицию для вставки на основе timestamp
+                            const messageTimestamp = new Date(message.timestamp).getTime();
+                            const messages = messagesContainer.querySelectorAll('.message');
+                            
+                            for (let i = messages.length - 1; i >= 0; i--) {
+                                const msg = messages[i];
+                                const msgId = parseInt(msg.dataset.messageId);
+                                
+                                // Если нашли сообщение, которое должно быть перед новым
+                                if (msgId < message.id) {
+                                    msg.after(tempDiv.firstChild);
+                                    inserted = true;
+                                    break;
+                                }
+                            }
+                            
+                            // Если не нашли место, добавляем в конец
+                            if (!inserted) {
+                                if (messages.length > 0) {
+                                    messagesContainer.appendChild(tempDiv.firstChild);
+                                } else {
+                                    messagesContainer.innerHTML = messageHTML;
+                                }
+                            }
+                            
+                            console.log(`Добавлено сообщение ID: ${message.id} при тихом обновлении`);
+                        }
+                    } else {
+                        // Обновляем только статус сообщения, если оно уже есть
+                        const readStatusElement = existingMessage.querySelector('.message-read-status');
+                        if (readStatusElement && message.read_count) {
+                            readStatusElement.textContent = '✓✓';
+                            readStatusElement.classList.add('read');
+                        }
+                    }
+                });
+            } else {
+                // Стандартная обработка для первой загрузки или обычного обновления
+                const messagesHTML = data.messages
+                    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+                    .map(message => createMessageElement(message))
+                    .join('');
+                
+                if (offset === 0) {
+                    messagesContainer.innerHTML = messagesHTML;
+                } else {
+                    // При подгрузке добавляем сообщения в начало
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = messagesHTML;
+                    while (tempDiv.firstChild) {
+                        messagesContainer.prepend(tempDiv.firstChild);
+                    }
+                }
+            }
+            
+            // Восстанавливаем позицию прокрутки или прокручиваем к последнему сообщению
+            if (offset === 0 && !silentUpdate) {
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else if (silentUpdate) {
+                if (wasAtBottom) {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                } else {
+                    messagesContainer.scrollTop = scrollPos;
+                }
             }
             
             // Если есть еще сообщения для загрузки, добавляем кнопку "Загрузить еще"
-            if (data.has_more) {
+            if (data.has_more && offset === 0 && !silentUpdate) {
                 const loadMoreBtn = document.createElement('div');
                 loadMoreBtn.className = 'load-more-btn';
                 loadMoreBtn.textContent = 'Загрузить предыдущие сообщения';
@@ -397,12 +509,16 @@ async function loadChatMessages(chatId, offset = 0) {
             }
         } else {
             console.error('Ошибка при загрузке сообщений:', data.message);
-            messagesContainer.innerHTML = '<div class="error-message">Ошибка загрузки сообщений</div>';
+            if (!silentUpdate) {
+                messagesContainer.innerHTML = '<div class="error-message">Ошибка загрузки сообщений</div>';
+            }
         }
     } catch (error) {
         console.error('Ошибка при загрузке сообщений:', error);
-        document.querySelector('.messages-container').innerHTML = 
-            '<div class="error-message">Не удалось загрузить сообщения</div>';
+        if (!silentUpdate) {
+            document.querySelector('.messages-container').innerHTML = 
+                '<div class="error-message">Не удалось загрузить сообщения</div>';
+        }
     }
 }
 
@@ -420,8 +536,11 @@ async function updateCurrentChatMessages() {
             return;
         }
         
+        // Добавляем временную метку для предотвращения кэширования
+        const timestamp = new Date().getTime();
+        
         // Запрашиваем только новые сообщения
-        const response = await fetch(`/api/chat/${currentChatId}/messages?after_id=${lastMessageId}`);
+        const response = await fetch(`/api/chat/${currentChatId}/messages?after_id=${lastMessageId}&t=${timestamp}`);
         
         // Обработка ответов с ошибками
         if (!response.ok) {
@@ -438,7 +557,7 @@ async function updateCurrentChatMessages() {
         const data = await response.json();
         
         if (data.success && data.messages && data.messages.length > 0) {
-            console.log(`Получено ${data.messages.length} новых сообщений`);
+            console.log(`Получено ${data.messages.length} новых сообщений:`, data.messages);
             const messagesContainer = document.querySelector('.messages-container');
             if (!messagesContainer) {
                 console.error('Контейнер сообщений не найден');
@@ -476,7 +595,7 @@ async function updateCurrentChatMessages() {
                         
                         if (tempDiv.firstChild) {
                             messagesContainer.appendChild(tempDiv.firstChild);
-                            console.log(`Добавлено сообщение ID: ${message.id}`);
+                            console.log(`Добавлено новое сообщение ID: ${message.id}`);
                         } else {
                             console.error(`Не удалось создать элемент для сообщения:`, message);
                         }

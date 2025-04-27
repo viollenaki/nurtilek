@@ -218,3 +218,204 @@
 .dark-theme .loading-indicator {
     color: #aaa;
 }
+
+/* Стили для списка контактов в модальном окне создания группы */
+.participants-section {
+    margin-top: 20px;
+}
+
+.participants-search {
+    margin-bottom: 15px;
+}
+
+.participants-list {
+    max-height: 150px;
+    overflow-y: auto;
+    margin-bottom: 15px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 8px;
+}
+
+.dark-theme .participants-list {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.selected-participants {
+    margin-bottom: 15px;
+}
+
+.participants-results {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.dark-theme .participants-results {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.contact-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    transition: background-color 0.2s;
+}
+
+.dark-theme .contact-item {
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+.contact-item:last-child {
+    border-bottom: none;
+}
+
+.contact-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark-theme .contact-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.contact-item.selected {
+    background-color: rgba(37, 211, 102, 0.1);
+}
+
+.dark-theme .contact-item.selected {
+    background-color: rgba(37, 211, 102, 0.2);
+}
+
+.contact-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 12px;
+}
+
+.contact-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.contact-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.contact-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.contact-select {
+    width: 20px;
+    height: 20px;
+    color: #25D366;
+    font-weight: bold;
+    text-align: center;
+}
+
+.selected-participant {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    background-color: rgba(37, 211, 102, 0.1);
+    border-radius: 20px;
+    margin: 5px;
+    display: inline-flex;
+}
+
+.dark-theme .selected-participant {
+    background-color: rgba(37, 211, 102, 0.2);
+}
+
+.participant-avatar {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 8px;
+}
+
+.participant-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.participant-name {
+    font-size: 12px;
+    margin-right: 8px;
+}
+
+.remove-participant {
+    width: 16px;
+    height: 16px;
+    line-height: 16px;
+    text-align: center;
+    font-size: 12px;
+    cursor: pointer;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.dark-theme .remove-participant {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.remove-participant:hover {
+    background-color: rgba(255, 0, 0, 0.2);
+}
+
+.no-participants, .no-results, .loading, .error {
+    padding: 15px;
+    text-align: center;
+    color: var(--icon-color);
+    font-style: italic;
+}
+
+.error {
+    color: #ff4757;
+}
+
+/* Дополнительные стили для группового чата */
+.group-edit-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.group-photo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.group-fields {
+    flex-grow: 1;
+}
+
+#group-description {
+    min-height: 80px;
+    resize: vertical;
+}
+
+/* Адаптивные стили */
+@media (min-width: 768px) {
+    .group-edit-container {
+        flex-direction: row;
+    }
+    
+    .group-photo-container {
+        margin-bottom: 0;
+        margin-right: 20px;
+    }
+}
