@@ -37,8 +37,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (response.ok) {
                 showMessage('Авторизация успешна!', 'success');
+                // Добавляем метку времени к URL для предотвращения кэширования
+                const timestamp = new Date().getTime();
                 setTimeout(() => {
-                    window.location.href = '/main';  // Может работать и с /main из-за нашего двойного маршрута
+                    window.location.href = '/main?t=' + timestamp;
                 }, 1000);
             } else {
                 showMessage(data.message || 'Ошибка при авторизации', 'error');
@@ -84,8 +86,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (response.ok) {
                 showMessage('Регистрация успешна!', 'success');
+                // Добавляем метку времени к URL для предотвращения кэширования
+                const timestamp = new Date().getTime();
                 setTimeout(() => {
-                    window.location.href = '/main';
+                    window.location.href = '/main?t=' + timestamp;
                 }, 1000);
             } else {
                 showMessage(data.message || 'Ошибка при регистрации', 'error');

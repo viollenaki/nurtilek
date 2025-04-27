@@ -48,6 +48,9 @@ def get_user_photo():
     
     user_id = session.get('user_id')
     
+    # Добавляем параметр для предотвращения кеширования
+    cache_bust = request.args.get('t', '')
+    
     conn = get_db_connection()
     photo_data = conn.execute('SELECT profile_photo FROM users WHERE id = ?', 
                            (user_id,)).fetchone()
@@ -55,31 +58,34 @@ def get_user_photo():
     
     if not photo_data or not photo_data['profile_photo']:
         # Возвращаем дефолтное изображение
-        # Проверяем оба возможных пути к аватару по умолчанию
         default_photo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
                                        'static', 'images', 'avatar.png')
         if not os.path.exists(default_photo_path):
-            default_photo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 
-                                          'static', 'images', 'avatar.png')
-            # Если и этот файл не существует, создаем пустой аватар
-            if not os.path.exists(default_photo_path):
+            # Создаем директорию, если не существует
+            os.makedirs(os.path.dirname(default_photo_path), exist_ok=True)
+            
+            # Создаем простой placeholder-аватар
+            try:
                 from PIL import Image, ImageDraw
-                # Создаем директорию, если она не существует
-                os.makedirs(os.path.dirname(default_photo_path), exist_ok=True)
-                
-                # Создаем простой placeholder-аватар
                 img = Image.new('RGB', (200, 200), color=(73, 109, 137))
                 d = ImageDraw.Draw(img)
                 d.ellipse((50, 50, 150, 150), fill=(255, 255, 255))
                 img.save(default_photo_path)
                 print(f"Default avatar created at {default_photo_path}")
+            except Exception as e:
+                print(f"Failed to create avatar: {e}")
+                # Если PIL недоступен, создаем пустой файл
+                with open(default_photo_path, 'wb') as f:
+                    f.write(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n\x0b\xb8\x00\x00\x00\x00IEND\xaeB`\x82')
         
         return send_file(default_photo_path, mimetype='image/png')
     
     return send_file(
         BytesIO(photo_data['profile_photo']),
         mimetype='image/jpeg',
-        as_attachment=False
+        as_attachment=False,
+        etag=False,  # Отключаем ETag для предотвращения кэширования
+        max_age=0    # Отключаем кэширование
     )
 
 @user_bp.route('/api/user/by_id/<int:user_id>', methods=['GET'])
