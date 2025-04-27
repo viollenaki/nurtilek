@@ -58,6 +58,55 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Функционал бокового меню опций
+    const optionsMenuBtn = document.getElementById('options-menu-btn');
+    const chatOptionsMenuBtn = document.getElementById('chat-options-menu-btn');
+    const optionsDrawer = document.getElementById('options-drawer');
+    const drawerCloseBtn = document.getElementById('drawer-close-btn');
+    const drawerOverlay = document.getElementById('drawer-overlay');
+    
+    // Открытие бокового меню
+    optionsMenuBtn?.addEventListener('click', function() {
+        optionsDrawer.classList.add('active');
+    });
+    
+    // Открытие бокового меню при клике на иконку в заголовке чата
+    chatOptionsMenuBtn?.addEventListener('click', function() {
+        optionsDrawer.classList.add('active');
+    });
+    
+    // Закрытие бокового меню
+    function closeDrawer() {
+        optionsDrawer.classList.remove('active');
+    }
+    
+    drawerCloseBtn?.addEventListener('click', closeDrawer);
+    drawerOverlay?.addEventListener('click', closeDrawer);
+    
+    // Обработчики для элементов меню
+    document.querySelectorAll('.drawer-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const action = this.querySelector('.drawer-item-text').textContent;
+            switch(action) {
+                case 'Shared photos':
+                    console.log('Opening shared photos');
+                    break;
+                case 'Shared files':
+                    console.log('Opening shared files');
+                    break;
+                case 'Shared links':
+                    console.log('Opening shared links');
+                    break;
+                case 'Block user':
+                    if(confirm('Вы действительно хотите заблокировать этого пользователя?')) {
+                        console.log('User blocked');
+                    }
+                    break;
+            }
+            closeDrawer();
+        });
+    });
+
     // Кнопка нового чата
     const actionButton = document.querySelector('.action-button');
     if (actionButton) {

@@ -34,7 +34,7 @@
                     <button class="theme-toggle" id="themeToggle">
                         <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
                     </button>
-                    <div class="options-icon">⋮</div>
+                    <div class="options-icon" id="options-menu-btn">⋮</div>
                     <div class="refresh-icon">↻</div>
                 </div>
             </div>
@@ -78,7 +78,7 @@
                     <div class="chat-header-actions">
                         <div class="chat-header-icon">📞</div>
                         <div class="chat-header-icon">📎</div>
-                        <div class="chat-header-icon">⋮</div>
+                        <div class="chat-header-icon" id="chat-options-menu-btn">⋮</div>
                     </div>
                 </div>
                 
@@ -101,6 +101,38 @@
                     </form>
                 </div>
             </div>
+        </div>
+
+        <!-- Боковое меню опций -->
+        <div class="side-drawer" id="options-drawer">
+            <div class="drawer-content">
+                <div class="drawer-header">
+                    <div class="drawer-title">Меню</div>
+                    <button class="drawer-close-btn" id="drawer-close-btn">✕</button>
+                </div>
+                <div class="drawer-body">
+                    <div class="drawer-item">
+                        <div class="drawer-item-icon">🖼️</div>
+                        <div class="drawer-item-text">Shared photos</div>
+                        <div class="drawer-item-arrow">›</div>
+                    </div>
+                    <div class="drawer-item">
+                        <div class="drawer-item-icon">📁</div>
+                        <div class="drawer-item-text">Shared files</div>
+                        <div class="drawer-item-arrow">›</div>
+                    </div>
+                    <div class="drawer-item">
+                        <div class="drawer-item-icon">🔗</div>
+                        <div class="drawer-item-text">Shared links</div>
+                        <div class="drawer-item-arrow">›</div>
+                    </div>
+                    <div class="drawer-item red-item">
+                        <div class="drawer-item-icon">🚫</div>
+                        <div class="drawer-item-text">Block user</div>
+                    </div>
+                </div>
+            </div>
+            <div class="drawer-overlay" id="drawer-overlay"></div>
         </div>
     </div>
 
@@ -186,9 +218,8 @@
             </div>
         </div>
     </div>
-</body>
-</html>    <div class="modal-overlay" id="create-group-modal">
 
+    <div class="modal-overlay" id="create-group-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <button class="modal-btn cancel-btn" id="group-modal-close-btn">Отмена</button>

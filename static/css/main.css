@@ -419,6 +419,136 @@ body {
     100% { opacity: 0.7; }
 }
 
+/* Стили для бокового меню */
+.side-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 1000;
+    display: flex;
+    pointer-events: none;
+}
+
+.drawer-content {
+    width: 80%;
+    max-width: 300px;
+    background-color: var(--card-bg);
+    height: 100%;
+    position: absolute;
+    right: 0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    pointer-events: auto;
+}
+
+.side-drawer.active .drawer-content {
+    transform: translateX(0);
+}
+
+.drawer-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.side-drawer.active .drawer-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+
+.drawer-title {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--text-color);
+}
+
+.drawer-close-btn {
+    background: none;
+    border: none;
+    color: var(--icon-color);
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.drawer-body {
+    padding: 10px 0;
+    flex-grow: 1;
+}
+
+.drawer-item {
+    display: flex;
+    align-items: center;
+    padding: 15px 20px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.drawer-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark-theme .drawer-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.drawer-item-icon {
+    font-size: 18px;
+    margin-right: 15px;
+    width: 24px;
+    text-align: center;
+}
+
+.drawer-item-text {
+    flex-grow: 1;
+    font-size: 16px;
+    color: var(--text-color);
+}
+
+.drawer-item-arrow {
+    color: var(--icon-color);
+    font-size: 18px;
+}
+
+.red-item {
+    color: #ff4757;
+}
+
+.red-item .drawer-item-text {
+    color: #ff4757;
+}
+
+/* Добавляем стиль для options-icon */
+.options-icon {
+    cursor: pointer;
+    transition: transform 0.3s;
+}
+
+.options-icon:hover {
+    transform: rotate(90deg);
+}
+
+/* Конец стилей для бокового меню */
+
 /* Модификации для мобильного интерфейса */
 @media (max-width: 768px) {
     .sidebar {
