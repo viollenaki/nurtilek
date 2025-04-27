@@ -158,7 +158,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Функция для обновления всех фотографий профиля на странице
     function updateAllProfileImages() {
         const timestamp = new Date().getTime();
-        const profileImages = document.querySelectorAll('img[src*="/api/user/photo"]');
+        
+        // Выбираем только изображения текущего пользователя
+        // Изображения текущего пользователя не имеют ID пользователя в URL
+        const profileImages = document.querySelectorAll('img[src^="/api/user/photo"]:not([src*="/api/user/photo/"])');
         
         profileImages.forEach(img => {
             const newSrc = `/api/user/photo?t=${timestamp}`;

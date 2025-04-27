@@ -178,9 +178,12 @@ function renderChatsList(chats) {
             ? `/api/chat/group_photo/${chat.group_id}` 
             : `/api/user/photo/${chat.participant_id}`;
         
+        // Добавляем атрибут group_id для групповых чатов
+        const groupIdAttr = chat.type === 'group' ? `data-group-id="${chat.group_id}"` : '';
+        
         // Формируем элемент чата
         chatsHTML += `
-            <div class="chat-item" data-chat-id="${chat.id}" data-chat-type="${chat.type}">
+            <div class="chat-item" data-chat-id="${chat.id}" data-chat-type="${chat.type}" ${groupIdAttr}>
                 <div class="chat-avatar">
                     <img src="${avatarUrl}" onerror="this.src='/static/images/avatar.png'" alt="${chat.name}">
                 </div>
@@ -203,8 +206,9 @@ function renderChatsList(chats) {
             const chatId = this.dataset.chatId;
             const chatType = this.dataset.chatType;
             const chatName = this.querySelector('.chat-name').textContent;
+            const groupId = chatType === 'group' ? this.dataset.groupId : null;
             
-            openChat(chatId, chatType, chatName);
+            openChat(chatId, chatType, chatName, groupId);
         });
     });
 }
@@ -229,7 +233,7 @@ function formatMessageTime(date) {
 }
 
 // Открытие чата для просмотра и отправки сообщений
-function openChat(chatId, chatType, chatName) {
+function openChat(chatId, chatType, chatName, groupId = null) {
     // Очищаем предыдущий интервал обновления, если он был
     if (activeChatlUpdateInterval) {
         clearInterval(activeChatlUpdateInterval);
@@ -244,16 +248,19 @@ function openChat(chatId, chatType, chatName) {
     localStorage.setItem('lastChatId', chatId);
     localStorage.setItem('lastChatType', chatType);
     localStorage.setItem('lastChatName', chatName);
+    if (groupId) localStorage.setItem('lastGroupId', groupId);
     
     // Обновляем заголовок чата
     document.querySelector('.chat-header-title').textContent = chatName;
     
-    // Обновляем аватар чата
+    // Обновляем аватар чата с добавлением метки времени против кэширования
     const chatAvatar = document.getElementById('chat-avatar');
     if (chatAvatar) {
+        const timestamp = new Date().getTime();
         const avatarUrl = chatType === 'group' 
-            ? `/api/chat/group_photo/${chatId}` 
-            : `/api/user/photo/${chatId}`;
+            ? `/api/chat/group_photo/${groupId || chatId}?t=${timestamp}` 
+            : `/api/user/photo/${chatId}?t=${timestamp}`;
+        
         chatAvatar.src = avatarUrl;
         chatAvatar.onerror = function() {
             this.src = '/static/images/avatar.png';

@@ -167,10 +167,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastChatId = localStorage.getItem('lastChatId');
         const lastChatType = localStorage.getItem('lastChatType');
         const lastChatName = localStorage.getItem('lastChatName');
+        const lastGroupId = localStorage.getItem('lastGroupId');
         
         if (lastChatId && lastChatType && lastChatName) {
             setTimeout(() => {
-                window.chatModule.openChat(lastChatId, lastChatType, lastChatName);
+                window.chatModule.openChat(lastChatId, lastChatType, lastChatName, lastGroupId);
             }, 1000);
         }
     }
