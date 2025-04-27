@@ -112,25 +112,24 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.drawer-item').forEach(item => {
         item.addEventListener('click', function() {
             const action = this.querySelector('.drawer-item-text').textContent;
-            const currentChatId = getCurrentChatId();
             switch(action) {
                 case 'Shared photos':
-                    if (currentChatId) {
-                        openSharedPhotosModal(currentChatId);
+                    if (getCurrentChatId()) {
+                        openSharedPhotosModal(getCurrentChatId());
                     } else {
                         alert('Сначала выберите чат');
                     }
                     break;
                 case 'Shared files':
-                    if (currentChatId) {
-                        openSharedFilesModal(currentChatId);
+                    if (getCurrentChatId()) {
+                        openSharedFilesModal(getCurrentChatId());
                     } else {
                         alert('Сначала выберите чат');
                     }
                     break;
                 case 'Shared links':
-                    if (currentChatId) {
-                        openSharedLinksModal(currentChatId);
+                    if (getCurrentChatId()) {
+                        openSharedLinksModal(getCurrentChatId());
                     } else {
                         alert('Сначала выберите чат');
                     }
@@ -387,43 +386,59 @@ function openSharedPhotosModal(chatId) {
     // Открываем модальное окно
     modal.classList.add('active');
     
-    // Имитация загрузки фотографий (в реальном проекте здесь был бы API запрос)
-    setTimeout(() => {
-        // Симуляция данных с сервера
-        const photos = [
-            { id: 1, url: 'https://via.placeholder.com/300x300?text=Photo+1', date: '2023-06-10' },
-            { id: 2, url: 'https://via.placeholder.com/300x300?text=Photo+2', date: '2023-06-11' },
-            { id: 3, url: 'https://via.placeholder.com/300x300?text=Photo+3', date: '2023-06-12' },
-            { id: 4, url: 'https://via.placeholder.com/300x300?text=Photo+4', date: '2023-06-13' },
-            { id: 5, url: 'https://via.placeholder.com/300x300?text=Photo+5', date: '2023-06-14' },
-            { id: 6, url: 'https://via.placeholder.com/300x300?text=Photo+6', date: '2023-06-15' }
-        ];
-        
-        if (photos.length === 0) {
-            container.innerHTML = '';
-            noMediaMessage.style.display = 'block';
-            return;
-        }
-        
-        // Создаем элементы для каждого фото
-        let photosHTML = '';
-        photos.forEach(photo => {
-            photosHTML += `
-                <div class="shared-photo-item" data-id="${photo.id}" data-url="${photo.url}">
-                    <img src="${photo.url}" alt="Photo ${photo.id}">
-                </div>
-            `;
-        });
-        
-        container.innerHTML = photosHTML;
-        
-        // Добавляем обработчики для просмотра фото
-        document.querySelectorAll('.shared-photo-item').forEach(item => {
-            item.addEventListener('click', function() {
-                openLightbox(this.dataset.url, photos.map(p => p.url));
+    // Загружаем данные с сервера
+    fetch(`/api/chat/${chatId}/media?type=image`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки фотографий');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Ошибка загрузки фотографий');
+            }
+            
+            // Проверяем, есть ли фотографии
+            if (!data.media || data.media.length === 0) {
+                container.innerHTML = '';
+                noMediaMessage.style.display = 'block';
+                return;
+            }
+            
+            // Создаем элементы для каждого фото
+            let photosHTML = '';
+            data.media.forEach(photo => {
+                // Форматируем время фотографии
+                const photoDate = new Date(photo.timestamp);
+                const formattedDate = formatSharedItemDate(photoDate);
+                
+                photosHTML += `
+                    <div class="shared-photo-item" data-id="${photo.id}" data-url="${photo.url}">
+                        <img src="${photo.url}" alt="Photo ${photo.id}">
+                        <div class="photo-info">
+                            <span class="photo-sender">${photo.sender_name}</span>
+                            <span class="photo-time">${formattedDate}</span>
+                        </div>
+                    </div>
+                `;
             });
+            
+            container.innerHTML = photosHTML;
+            
+            // Добавляем обработчики для просмотра фото
+            document.querySelectorAll('.shared-photo-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const imageUrl = this.dataset.url;
+                    const allImages = [...document.querySelectorAll('.shared-photo-item')].map(item => item.dataset.url);
+                    openLightbox(imageUrl, allImages);
+                });
+            });
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке фотографий:', error);
+            container.innerHTML = `<div class="error-message">Ошибка при загрузке фотографий: ${error.message}</div>`;
         });
-    }, 800);
 }
 
 // Открытие модального окна с общими файлами
@@ -439,60 +454,91 @@ function openSharedFilesModal(chatId) {
     // Открываем модальное окно
     modal.classList.add('active');
     
-    // Имитация загрузки файлов (в реальном проекте здесь был бы API запрос)
-    setTimeout(() => {
-        // Симуляция данных с сервера
-        const files = [
-            { id: 1, name: 'document.pdf', size: '2.5 MB', date: '10 июля 2023', type: 'pdf' },
-            { id: 2, name: 'presentation.pptx', size: '5.1 MB', date: '15 июля 2023', type: 'pptx' },
-            { id: 3, name: 'spreadsheet.xlsx', size: '1.8 MB', date: '20 июля 2023', type: 'xlsx' },
-            { id: 4, name: 'report.docx', size: '3.2 MB', date: '25 июля 2023', type: 'docx' }
-        ];
-        
-        if (files.length === 0) {
+    // Загружаем данные с сервера
+    fetch(`/api/chat/${chatId}/files`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки файлов');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Ошибка загрузки файлов');
+            }
+            
+            // Проверяем, есть ли файлы
+            if (!data.files || data.files.length === 0) {
+                container.innerHTML = '';
+                noMediaMessage.style.display = 'block';
+                return;
+            }
+            
+            // Создаем элементы для каждого файла
             container.innerHTML = '';
-            noMediaMessage.style.display = 'block';
-            return;
-        }
-        
-        // Определяем иконку для каждого типа файла
-        function getFileIcon(type) {
-            const icons = {
-                'pdf': '📄',
-                'docx': '📝',
-                'xlsx': '📊',
-                'pptx': '📑',
-                'default': '📁'
-            };
-            
-            return icons[type] || icons.default;
-        }
-        
-        // Создаем элементы для каждого файла
-        container.innerHTML = '';
-        files.forEach(file => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'shared-file-item';
-            fileItem.innerHTML = `
-                <div class="file-icon">${getFileIcon(file.type)}</div>
-                <div class="file-info">
-                    <div class="file-name">${file.name}</div>
-                    <div class="file-details">
-                        <span class="file-size">${file.size}</span>
-                        <span class="file-date">${file.date}</span>
+            data.files.forEach(file => {
+                // Форматируем время файла
+                const fileDate = new Date(file.timestamp);
+                const formattedDate = formatSharedItemDate(fileDate);
+                
+                // Определяем иконку для файла
+                let fileIcon = getFileIconByName(file.name);
+                
+                const fileItem = document.createElement('div');
+                fileItem.className = 'shared-file-item';
+                fileItem.innerHTML = `
+                    <div class="file-icon">${fileIcon}</div>
+                    <div class="file-info">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-details">
+                            <span class="file-size">${file.size || 'Неизвестно'}</span>
+                            <span class="file-date">${formattedDate}</span>
+                            <span class="file-sender">От: ${file.sender_name}</span>
+                        </div>
                     </div>
-                </div>
-            `;
-            
-            // Добавляем обработчик для скачивания файла
-            fileItem.addEventListener('click', function() {
-                alert(`Скачиваем файл: ${file.name}`);
-                // В реальном проекте здесь был бы код для скачивания файла
+                `;
+                
+                // Добавляем обработчик для скачивания файла
+                fileItem.addEventListener('click', function() {
+                    window.open(file.url, '_blank');
+                });
+                
+                container.appendChild(fileItem);
             });
-            
-            container.appendChild(fileItem);
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке файлов:', error);
+            container.innerHTML = `<div class="error-message">Ошибка при загрузке файлов: ${error.message}</div>`;
         });
-    }, 800);
+}
+
+// Определение иконки файла по его имени
+function getFileIconByName(fileName) {
+    const extension = fileName.split('.').pop().toLowerCase();
+    const icons = {
+        'pdf': '📄',
+        'doc': '📝',
+        'docx': '📝',
+        'xls': '📊',
+        'xlsx': '📊',
+        'ppt': '📑',
+        'pptx': '📑',
+        'txt': '📃',
+        'zip': '📦',
+        'rar': '📦',
+        'mp3': '🎵',
+        'wav': '🎵',
+        'mp4': '🎬',
+        'avi': '🎬',
+        'mov': '🎬',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'png': '🖼️',
+        'gif': '🖼️',
+        'default': '📁'
+    };
+    
+    return icons[extension] || icons.default;
 }
 
 // Открытие модального окна с общими ссылками
@@ -508,36 +554,99 @@ function openSharedLinksModal(chatId) {
     // Открываем модальное окно
     modal.classList.add('active');
     
-    // Имитация загрузки ссылок (в реальном проекте здесь был бы API запрос)
-    setTimeout(() => {
-        // Симуляция данных с сервера
-        const links = [
-            { id: 1, title: 'Google', url: 'https://www.google.com', sender: 'Андрей', date: '10 июля 2023' },
-            { id: 2, title: 'GitHub', url: 'https://github.com', sender: 'Мария', date: '12 июля 2023' },
-            { id: 3, title: 'Stack Overflow', url: 'https://stackoverflow.com', sender: 'Иван', date: '15 июля 2023' },
-            { id: 4, title: 'MDN Web Docs', url: 'https://developer.mozilla.org', sender: 'Елена', date: '18 июля 2023' }
-        ];
-        
-        if (links.length === 0) {
-            container.innerHTML = '';
-            noMediaMessage.style.display = 'block';
-            return;
-        }
-        
-        // Создаем элементы для каждой ссылки
-        container.innerHTML = '';
-        links.forEach(link => {
-            const linkItem = document.createElement('div');
-            linkItem.className = 'shared-link-item';
-            linkItem.innerHTML = `
-                <div class="link-title">${link.title}</div>
-                <a href="${link.url}" target="_blank" class="link-url">${link.url}</a>
-                <div class="link-details">Отправлено: ${link.sender} | ${link.date}</div>
-            `;
+    // Загружаем данные с сервера
+    fetch(`/api/chat/${chatId}/links`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки ссылок');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (!data.success) {
+                throw new Error(data.message || 'Ошибка загрузки ссылок');
+            }
             
-            container.appendChild(linkItem);
+            // Проверяем, есть ли ссылки
+            if (!data.links || data.links.length === 0) {
+                container.innerHTML = '';
+                noMediaMessage.style.display = 'block';
+                return;
+            }
+            
+            // Создаем элементы для каждой ссылки
+            container.innerHTML = '';
+            data.links.forEach(link => {
+                const linkItem = document.createElement('div');
+                linkItem.className = 'shared-link-item';
+                
+                // Форматируем время сообщения
+                const messageDate = new Date(link.timestamp);
+                const formattedDate = formatSharedItemDate(messageDate);
+                
+                // Определяем иконку в зависимости от типа URL
+                let linkIcon = '🔗';
+                
+                if (link.url.includes('youtube.com') || link.url.includes('youtu.be')) {
+                    linkIcon = '📺';
+                } else if (link.url.includes('github.com')) {
+                    linkIcon = '📂';
+                } else if (link.url.includes('instagram.com')) {
+                    linkIcon = '📷';
+                } else if (link.url.includes('twitter.com') || link.url.includes('x.com')) {
+                    linkIcon = '🐦';
+                } else if (link.url.includes('facebook.com') || link.url.includes('fb.com')) {
+                    linkIcon = '👤';
+                } else if (link.url.includes('linkedin.com')) {
+                    linkIcon = '💼';
+                } else if (link.url.includes('reddit.com')) {
+                    linkIcon = '🔴';
+                } else if (link.url.includes('wikipedia.org')) {
+                    linkIcon = '📚';
+                } else if (link.url.includes('amazon.com')) {
+                    linkIcon = '🛒';
+                } else if (link.url.includes('docs.google.com')) {
+                    linkIcon = '📄';
+                }
+                
+                linkItem.innerHTML = `
+                    <div class="link-header">
+                        <span class="link-icon">${linkIcon}</span>
+                        <div class="link-title">${link.title}</div>
+                    </div>
+                    <a href="${link.url}" target="_blank" class="link-url">${link.url}</a>
+                    <div class="link-context">${link.context || ''}</div>
+                    <div class="link-details">
+                        Отправлено: ${link.sender_name} · ${formattedDate}
+                    </div>
+                `;
+                
+                container.appendChild(linkItem);
+            });
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке ссылок:', error);
+            container.innerHTML = `<div class="error-message">Ошибка при загрузке ссылок: ${error.message}</div>`;
         });
-    }, 800);
+}
+
+// Форматирование даты для медиа-элементов
+function formatSharedItemDate(date) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    if (date >= today) {
+        // Сегодня - показываем только время
+        return 'Сегодня ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (date >= yesterday) {
+        // Вчера
+        return 'Вчера ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+        // Другие даты - полный формат
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
 }
 
 // Функция для открытия лайтбокса с фотографией

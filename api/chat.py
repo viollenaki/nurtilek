@@ -1397,31 +1397,70 @@ def get_chat_links(chat_id):
     
     # Получаем ссылки из сообщений
     try:
-        limit = request.args.get('limit', 20, type=int)
+        limit = request.args.get('limit', 50, type=int)  # Увеличиваем лимит до 50
         offset = request.args.get('offset', 0, type=int)
         
-        # В реальном проекте здесь был бы более сложный запрос для извлечения ссылок
-        # из текста сообщений с использованием регулярных выражений или другой логики
-        link_messages = conn.execute('''
+        # Получаем все сообщения из чата
+        messages = conn.execute('''
             SELECT m.id, m.sender_id, u.nickname as sender_name, m.timestamp, m.content
             FROM messages m
             JOIN users u ON m.sender_id = u.id
-            WHERE m.chat_id = ? AND m.content LIKE '%http%'
+            WHERE m.chat_id = ?
             ORDER BY m.timestamp DESC
             LIMIT ? OFFSET ?
         ''', (chat_id, limit, offset)).fetchall()
         
         result = []
         import re
-        url_pattern = re.compile(r'https?://\S+')
+        # Улучшенный шаблон регулярного выражения для поиска ссылок
+        url_pattern = re.compile(r'(https?://[^\s<>"\']+|www\.[^\s<>"\']+)')
         
-        for message in link_messages:
+        for message in messages:
+            if not message['content']:
+                continue
+                
             # Ищем все ссылки в тексте сообщения
             urls = url_pattern.findall(message['content'])
             
             for url in urls:
-                # В реальном проекте вы могли бы получить заголовок страницы и другую информацию
-                title = url.split('//')[-1].split('/')[0]  # Примитивное извлечение домена
+                # Обрабатываем ссылки, начинающиеся с 'www.'
+                if url.startswith('www.'):
+                    url = 'http://' + url
+                
+                # Получаем название сайта из URL
+                try:
+                    from urllib.parse import urlparse
+                    parsed_url = urlparse(url)
+                    domain = parsed_url.netloc
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                    
+                    # Для более информативного заголовка - добавляем часть пути
+                    path = parsed_url.path
+                    if path and path != '/' and len(path) > 1:
+                        parts = path.strip('/').split('/')
+                        if len(parts[0]) < 30:  # Если первая часть пути не слишком длинная
+                            title = f"{domain} / {parts[0]}"
+                        else:
+                            title = domain
+                    else:
+                        title = domain
+                except:
+                    title = url[:50] + '...' if len(url) > 50 else url
+                
+                # Извлекаем контекст - текст сообщения вокруг ссылки (до 50 символов)
+                message_text = message['content']
+                start_pos = message_text.find(url)
+                if start_pos >= 0:
+                    context_start = max(0, start_pos - 25)
+                    context_end = min(len(message_text), start_pos + len(url) + 25)
+                    context = message_text[context_start:context_end]
+                    if context_start > 0:
+                        context = '...' + context
+                    if context_end < len(message_text):
+                        context += '...'
+                else:
+                    context = message_text[:100] + '...' if len(message_text) > 100 else message_text
                 
                 result.append({
                     "id": message['id'],
@@ -1429,7 +1468,8 @@ def get_chat_links(chat_id):
                     "sender_name": message['sender_name'],
                     "timestamp": message['timestamp'],
                     "url": url,
-                    "title": title
+                    "title": title,
+                    "context": context
                 })
         
         conn.close()
