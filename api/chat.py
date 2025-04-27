@@ -1209,3 +1209,237 @@ def add_members(group_id):
         conn.rollback()
         conn.close()
         return jsonify({"success": False, "message": f"Ошибка при добавлении участников: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/<int:chat_id>/media', methods=['GET'])
+def get_chat_media(chat_id):
+    """Get media (photos, videos) from a specific chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    media_type = request.args.get('type', 'image')  # По умолчанию получаем изображения
+    
+    current_user_id = session.get('user_id')
+    
+    # Проверяем доступ к чату (такой же код, как в get_chat_messages)
+    conn = get_db_connection()
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
+        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
+    
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+    
+    # Получаем медиафайлы из сообщений
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        media_messages = conn.execute('''
+            SELECT m.id, m.sender_id, u.nickname as sender_name, m.timestamp
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.chat_id = ? AND m.media_type = ?
+            ORDER BY m.timestamp DESC
+            LIMIT ? OFFSET ?
+        ''', (chat_id, media_type, limit, offset)).fetchall()
+        
+        result = []
+        for message in media_messages:
+            result.append({
+                "id": message['id'],
+                "sender_id": message['sender_id'],
+                "sender_name": message['sender_name'],
+                "timestamp": message['timestamp'],
+                "url": f"/api/chat/media/{message['id']}"
+            })
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "media": result,
+            "total": len(result),
+            "has_more": len(result) == limit
+        })
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при получении медиафайлов: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/<int:chat_id>/files', methods=['GET'])
+def get_chat_files(chat_id):
+    """Get files from a specific chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    # Проверяем доступ к чату (такой же код, как в get_chat_messages)
+    conn = get_db_connection()
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
+        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
+    
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+    
+    # Получаем файлы из сообщений
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        file_messages = conn.execute('''
+            SELECT m.id, m.sender_id, u.nickname as sender_name, m.timestamp, m.content as file_name
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.chat_id = ? AND m.media_type = 'file'
+            ORDER BY m.timestamp DESC
+            LIMIT ? OFFSET ?
+        ''', (chat_id, limit, offset)).fetchall()
+        
+        result = []
+        for message in file_messages:
+            # Получаем размер файла (в реальном проекте может потребоваться адаптация)
+            # Здесь предполагается, что у вас есть способ получить размер файла
+            file_size = "Неизвестно"  # В реальном проекте вы бы получали реальный размер
+            
+            result.append({
+                "id": message['id'],
+                "sender_id": message['sender_id'],
+                "sender_name": message['sender_name'],
+                "timestamp": message['timestamp'],
+                "name": message['file_name'],
+                "size": file_size,
+                "url": f"/api/chat/media/{message['id']}"
+            })
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "files": result,
+            "total": len(result),
+            "has_more": len(result) == limit
+        })
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при получении файлов: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/<int:chat_id>/links', methods=['GET'])
+def get_chat_links(chat_id):
+    """Get links from a specific chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    # Проверяем доступ к чату (такой же код, как в get_chat_messages)
+    conn = get_db_connection()
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
+        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
+    
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+    
+    # Получаем ссылки из сообщений
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        
+        # В реальном проекте здесь был бы более сложный запрос для извлечения ссылок
+        # из текста сообщений с использованием регулярных выражений или другой логики
+        link_messages = conn.execute('''
+            SELECT m.id, m.sender_id, u.nickname as sender_name, m.timestamp, m.content
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.chat_id = ? AND m.content LIKE '%http%'
+            ORDER BY m.timestamp DESC
+            LIMIT ? OFFSET ?
+        ''', (chat_id, limit, offset)).fetchall()
+        
+        result = []
+        import re
+        url_pattern = re.compile(r'https?://\S+')
+        
+        for message in link_messages:
+            # Ищем все ссылки в тексте сообщения
+            urls = url_pattern.findall(message['content'])
+            
+            for url in urls:
+                # В реальном проекте вы могли бы получить заголовок страницы и другую информацию
+                title = url.split('//')[-1].split('/')[0]  # Примитивное извлечение домена
+                
+                result.append({
+                    "id": message['id'],
+                    "sender_id": message['sender_id'],
+                    "sender_name": message['sender_name'],
+                    "timestamp": message['timestamp'],
+                    "url": url,
+                    "title": title
+                })
+        
+        conn.close()
+        return jsonify({
+            "success": True,
+            "links": result,
+            "total": len(result),
+            "has_more": len(result) == limit
+        })
+        
+    except Exception as e:
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при получении ссылок: {str(e)}"}), 500

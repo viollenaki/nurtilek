@@ -41,21 +41,7 @@
                         <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
                     </button>
                     <div class="options-icon" id="drop-down-btn">👤</div>
-                    <div class="dropdown-menu" id="options-dropdown">
-                        <div class="dropdown-item" id="profile-settings-btn">
-                            <span class="dropdown-icon">👤</span>
-                            <span class="dropdown-text">Профиль</span>
-                        </div>
-                        <div class="dropdown-item" id="app-settings-btn">
-                            <span class="dropdown-icon">⚙️</span>
-                            <span class="dropdown-text">Настройки</span>
-                        </div>
-                        <div class="dropdown-divider"></div>
-                        <div class="dropdown-item" id="logout-btn">
-                            <span class="dropdown-icon">🚪</span>
-                            <span class="dropdown-text">Выйти</span>
-                        </div>
-                    </div>
+
                 </div>
             </div>
             
@@ -374,6 +360,57 @@
                     <p>Выбрано: <span id="selected-add-members-count">0</span></p>
                     <div id="selected-members-list" class="selected-members-list"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отображения общих фото -->
+    <div class="modal-overlay" id="shared-photos-modal">
+        <div class="modal-content shared-media-modal">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="shared-photos-close-btn">Закрыть</button>
+                <div class="modal-title">Общие фотографии</div>
+                <div class="empty-btn"></div>
+            </div>
+            <div class="modal-body">
+                <div id="shared-photos-container" class="shared-media-container">
+                    <div class="loading-indicator">Загрузка фотографий...</div>
+                </div>
+                <div class="no-media-message" style="display: none;">В этом чате нет общих фотографий</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отображения общих файлов -->
+    <div class="modal-overlay" id="shared-files-modal">
+        <div class="modal-content shared-media-modal">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="shared-files-close-btn">Закрыть</button>
+                <div class="modal-title">Общие файлы</div>
+                <div class="empty-btn"></div>
+            </div>
+            <div class="modal-body">
+                <div id="shared-files-container" class="shared-media-container">
+                    <div class="loading-indicator">Загрузка файлов...</div>
+                </div>
+                <div class="no-media-message" style="display: none;">В этом чате нет общих файлов</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отображения общих ссылок -->
+    <div class="modal-overlay" id="shared-links-modal">
+        <div class="modal-content shared-media-modal">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="shared-links-close-btn">Закрыть</button>
+                <div class="modal-title">Общие ссылки</div>
+                <div class="empty-btn"></div>
+            </div>
+            <div class="modal-body">
+                <div id="shared-links-container" class="shared-media-container">
+                    <div class="loading-indicator">Загрузка ссылок...</div>
+                </div>
+                <div class="no-media-message" style="display: none;">В этом чате нет общих ссылок</div>
             </div>
         </div>
     </div>

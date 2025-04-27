@@ -112,15 +112,28 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.drawer-item').forEach(item => {
         item.addEventListener('click', function() {
             const action = this.querySelector('.drawer-item-text').textContent;
+            const currentChatId = getCurrentChatId();
             switch(action) {
                 case 'Shared photos':
-                    console.log('Opening shared photos');
+                    if (currentChatId) {
+                        openSharedPhotosModal(currentChatId);
+                    } else {
+                        alert('Сначала выберите чат');
+                    }
                     break;
                 case 'Shared files':
-                    console.log('Opening shared files');
+                    if (currentChatId) {
+                        openSharedFilesModal(currentChatId);
+                    } else {
+                        alert('Сначала выберите чат');
+                    }
                     break;
                 case 'Shared links':
-                    console.log('Opening shared links');
+                    if (currentChatId) {
+                        openSharedLinksModal(currentChatId);
+                    } else {
+                        alert('Сначала выберите чат');
+                    }
                     break;
                 case 'Block user':
                     if(confirm('Вы действительно хотите заблокировать этого пользователя?')) {
@@ -306,4 +319,300 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    // Инициализация модальных окон для медиафайлов
+    initMediaModals();
 });
+
+// Функция для получения текущего чата
+function getCurrentChatId() {
+    return window.chatModule ? window.chatModule.getCurrentChatId() : null;
+}
+
+// Инициализация модальных окон для медиафайлов
+function initMediaModals() {
+    // Общие фотографии
+    const sharedPhotosModal = document.getElementById('shared-photos-modal');
+    const sharedPhotosCloseBtn = document.getElementById('shared-photos-close-btn');
+    
+    sharedPhotosCloseBtn?.addEventListener('click', function() {
+        sharedPhotosModal.classList.remove('active');
+    });
+    
+    sharedPhotosModal?.addEventListener('click', function(e) {
+        if (e.target === sharedPhotosModal) {
+            sharedPhotosModal.classList.remove('active');
+        }
+    });
+    
+    // Общие файлы
+    const sharedFilesModal = document.getElementById('shared-files-modal');
+    const sharedFilesCloseBtn = document.getElementById('shared-files-close-btn');
+    
+    sharedFilesCloseBtn?.addEventListener('click', function() {
+        sharedFilesModal.classList.remove('active');
+    });
+    
+    sharedFilesModal?.addEventListener('click', function(e) {
+        if (e.target === sharedFilesModal) {
+            sharedFilesModal.classList.remove('active');
+        }
+    });
+    
+    // Общие ссылки
+    const sharedLinksModal = document.getElementById('shared-links-modal');
+    const sharedLinksCloseBtn = document.getElementById('shared-links-close-btn');
+    
+    sharedLinksCloseBtn?.addEventListener('click', function() {
+        sharedLinksModal.classList.remove('active');
+    });
+    
+    sharedLinksModal?.addEventListener('click', function(e) {
+        if (e.target === sharedLinksModal) {
+            sharedLinksModal.classList.remove('active');
+        }
+    });
+}
+
+// Открытие модального окна с общими фотографиями
+function openSharedPhotosModal(chatId) {
+    const modal = document.getElementById('shared-photos-modal');
+    const container = document.getElementById('shared-photos-container');
+    const noMediaMessage = modal.querySelector('.no-media-message');
+    
+    // Показываем индикатор загрузки
+    container.innerHTML = '<div class="loading-indicator">Загрузка фотографий...</div>';
+    noMediaMessage.style.display = 'none';
+    
+    // Открываем модальное окно
+    modal.classList.add('active');
+    
+    // Имитация загрузки фотографий (в реальном проекте здесь был бы API запрос)
+    setTimeout(() => {
+        // Симуляция данных с сервера
+        const photos = [
+            { id: 1, url: 'https://via.placeholder.com/300x300?text=Photo+1', date: '2023-06-10' },
+            { id: 2, url: 'https://via.placeholder.com/300x300?text=Photo+2', date: '2023-06-11' },
+            { id: 3, url: 'https://via.placeholder.com/300x300?text=Photo+3', date: '2023-06-12' },
+            { id: 4, url: 'https://via.placeholder.com/300x300?text=Photo+4', date: '2023-06-13' },
+            { id: 5, url: 'https://via.placeholder.com/300x300?text=Photo+5', date: '2023-06-14' },
+            { id: 6, url: 'https://via.placeholder.com/300x300?text=Photo+6', date: '2023-06-15' }
+        ];
+        
+        if (photos.length === 0) {
+            container.innerHTML = '';
+            noMediaMessage.style.display = 'block';
+            return;
+        }
+        
+        // Создаем элементы для каждого фото
+        let photosHTML = '';
+        photos.forEach(photo => {
+            photosHTML += `
+                <div class="shared-photo-item" data-id="${photo.id}" data-url="${photo.url}">
+                    <img src="${photo.url}" alt="Photo ${photo.id}">
+                </div>
+            `;
+        });
+        
+        container.innerHTML = photosHTML;
+        
+        // Добавляем обработчики для просмотра фото
+        document.querySelectorAll('.shared-photo-item').forEach(item => {
+            item.addEventListener('click', function() {
+                openLightbox(this.dataset.url, photos.map(p => p.url));
+            });
+        });
+    }, 800);
+}
+
+// Открытие модального окна с общими файлами
+function openSharedFilesModal(chatId) {
+    const modal = document.getElementById('shared-files-modal');
+    const container = document.getElementById('shared-files-container');
+    const noMediaMessage = modal.querySelector('.no-media-message');
+    
+    // Показываем индикатор загрузки
+    container.innerHTML = '<div class="loading-indicator">Загрузка файлов...</div>';
+    noMediaMessage.style.display = 'none';
+    
+    // Открываем модальное окно
+    modal.classList.add('active');
+    
+    // Имитация загрузки файлов (в реальном проекте здесь был бы API запрос)
+    setTimeout(() => {
+        // Симуляция данных с сервера
+        const files = [
+            { id: 1, name: 'document.pdf', size: '2.5 MB', date: '10 июля 2023', type: 'pdf' },
+            { id: 2, name: 'presentation.pptx', size: '5.1 MB', date: '15 июля 2023', type: 'pptx' },
+            { id: 3, name: 'spreadsheet.xlsx', size: '1.8 MB', date: '20 июля 2023', type: 'xlsx' },
+            { id: 4, name: 'report.docx', size: '3.2 MB', date: '25 июля 2023', type: 'docx' }
+        ];
+        
+        if (files.length === 0) {
+            container.innerHTML = '';
+            noMediaMessage.style.display = 'block';
+            return;
+        }
+        
+        // Определяем иконку для каждого типа файла
+        function getFileIcon(type) {
+            const icons = {
+                'pdf': '📄',
+                'docx': '📝',
+                'xlsx': '📊',
+                'pptx': '📑',
+                'default': '📁'
+            };
+            
+            return icons[type] || icons.default;
+        }
+        
+        // Создаем элементы для каждого файла
+        container.innerHTML = '';
+        files.forEach(file => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'shared-file-item';
+            fileItem.innerHTML = `
+                <div class="file-icon">${getFileIcon(file.type)}</div>
+                <div class="file-info">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-details">
+                        <span class="file-size">${file.size}</span>
+                        <span class="file-date">${file.date}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Добавляем обработчик для скачивания файла
+            fileItem.addEventListener('click', function() {
+                alert(`Скачиваем файл: ${file.name}`);
+                // В реальном проекте здесь был бы код для скачивания файла
+            });
+            
+            container.appendChild(fileItem);
+        });
+    }, 800);
+}
+
+// Открытие модального окна с общими ссылками
+function openSharedLinksModal(chatId) {
+    const modal = document.getElementById('shared-links-modal');
+    const container = document.getElementById('shared-links-container');
+    const noMediaMessage = modal.querySelector('.no-media-message');
+    
+    // Показываем индикатор загрузки
+    container.innerHTML = '<div class="loading-indicator">Загрузка ссылок...</div>';
+    noMediaMessage.style.display = 'none';
+    
+    // Открываем модальное окно
+    modal.classList.add('active');
+    
+    // Имитация загрузки ссылок (в реальном проекте здесь был бы API запрос)
+    setTimeout(() => {
+        // Симуляция данных с сервера
+        const links = [
+            { id: 1, title: 'Google', url: 'https://www.google.com', sender: 'Андрей', date: '10 июля 2023' },
+            { id: 2, title: 'GitHub', url: 'https://github.com', sender: 'Мария', date: '12 июля 2023' },
+            { id: 3, title: 'Stack Overflow', url: 'https://stackoverflow.com', sender: 'Иван', date: '15 июля 2023' },
+            { id: 4, title: 'MDN Web Docs', url: 'https://developer.mozilla.org', sender: 'Елена', date: '18 июля 2023' }
+        ];
+        
+        if (links.length === 0) {
+            container.innerHTML = '';
+            noMediaMessage.style.display = 'block';
+            return;
+        }
+        
+        // Создаем элементы для каждой ссылки
+        container.innerHTML = '';
+        links.forEach(link => {
+            const linkItem = document.createElement('div');
+            linkItem.className = 'shared-link-item';
+            linkItem.innerHTML = `
+                <div class="link-title">${link.title}</div>
+                <a href="${link.url}" target="_blank" class="link-url">${link.url}</a>
+                <div class="link-details">Отправлено: ${link.sender} | ${link.date}</div>
+            `;
+            
+            container.appendChild(linkItem);
+        });
+    }, 800);
+}
+
+// Функция для открытия лайтбокса с фотографией
+function openLightbox(imageUrl, allImages = []) {
+    // Создаем элементы лайтбокса
+    const lightbox = document.createElement('div');
+    lightbox.className = 'lightbox-overlay';
+    
+    let currentIndex = allImages.indexOf(imageUrl);
+    
+    lightbox.innerHTML = `
+        <div class="lightbox-content">
+            <img src="${imageUrl}" class="lightbox-img" alt="Фото">
+            <button class="lightbox-close">&times;</button>
+            ${allImages.length > 1 ? `
+                <button class="lightbox-nav lightbox-prev">&lt;</button>
+                <button class="lightbox-nav lightbox-next">&gt;</button>
+            ` : ''}
+        </div>
+    `;
+    
+    document.body.appendChild(lightbox);
+    
+    // Предотвращаем скролл страницы
+    document.body.style.overflow = 'hidden';
+    
+    // Обработчик закрытия лайтбокса
+    lightbox.querySelector('.lightbox-close').addEventListener('click', closeLightbox);
+    lightbox.addEventListener('click', function(e) {
+        if (e.target === lightbox) {
+            closeLightbox();
+        }
+    });
+    
+    // Обработчики для навигации (если есть несколько изображений)
+    if (allImages.length > 1) {
+        // Предыдущее изображение
+        lightbox.querySelector('.lightbox-prev').addEventListener('click', function() {
+            currentIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+            updateLightboxImage(allImages[currentIndex]);
+        });
+        
+        // Следующее изображение
+        lightbox.querySelector('.lightbox-next').addEventListener('click', function() {
+            currentIndex = (currentIndex + 1) % allImages.length;
+            updateLightboxImage(allImages[currentIndex]);
+        });
+        
+        // Навигация с помощью клавиатуры
+        document.addEventListener('keydown', keyNavHandler);
+    }
+    
+    // Обновление изображения в лайтбоксе
+    function updateLightboxImage(newUrl) {
+        const img = lightbox.querySelector('.lightbox-img');
+        img.src = newUrl;
+    }
+    
+    // Обработчик нажатий клавиш для навигации
+    function keyNavHandler(e) {
+        if (e.key === 'ArrowLeft') {
+            currentIndex = (currentIndex - 1 + allImages.length) % allImages.length;
+            updateLightboxImage(allImages[currentIndex]);
+        } else if (e.key === 'ArrowRight') {
+            currentIndex = (currentIndex + 1) % allImages.length;
+            updateLightboxImage(allImages[currentIndex]);
+        } else if (e.key === 'Escape') {
+            closeLightbox();
+        }
+    }
+    
+    // Функция закрытия лайтбокса
+    function closeLightbox() {
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', keyNavHandler);
+        lightbox.remove();
+    }
+}
