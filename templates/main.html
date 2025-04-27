@@ -17,81 +17,89 @@
 </head>
 <body class="light-theme">
     <div class="bg-wrapper"></div>
-    <div class="sidebar">
-        <div class="user-info">
-            <div class="user-avatar" id="profile-photo-btn">
-                <img src="/api/user/photo?t={{ timestamp }}" alt="{{ username }}" id="userProfileImage" onerror="this.src='/static/images/avatar.png'">
-            </div>
-            <div class="user-details">
-                <div class="user-name">{{ username }}</div>
-                <div class="user-email">Онлайн</div>
-            </div>
-            <div class="user-controls">
-                <button class="theme-toggle" id="themeToggle">
-                    <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
-                </button>
-                <div class="options-icon">⋮</div>
-                <div class="refresh-icon">↻</div>
-            </div>
-        </div>
-        
-        <div class="search-container">
-            <span class="search-icon">🔍</span>
-            <input type="text" class="search-input" placeholder="Поиск...">
-        </div>
-        
-        <div class="user-icons">
-            <div class="user-icon" title="Новый чат" id="new-chat-btn">💬</div>
-            <div class="user-icon" title="Новая группа">👥</div>
-        </div>
-        
-        <div class="chat-list">
-            <div class="no-chats">Нет активных чатов</div>
-        </div>
-    </div>
     
-    <div class="main-content">
-        <div class="chat-logo">
-            <span class="chat-logo-icon">💬</span>
-        </div>
-        <div class="chat-title">WhatsappAIT</div>
-        <div class="chat-subtitle">Выберите контакт из списка чатов или создайте новый чат для начала общения</div>
-        <button class="action-button" id="new-chat-main-btn">Начать новый чат</button>
-    </div>
-    
-    <!-- Интерфейс чата -->
-    <div id="chat-interface">
-        <div class="chat-header">
-            <div id="back-to-chats">←</div>
-            <div class="chat-header-info">
-                <div class="chat-header-avatar">
-                    <img src="/static/images/avatar.png" alt="avatar" id="chat-avatar">
+    <div class="app-container">
+        <!-- Левая панель с списком чатов -->
+        <div class="sidebar">
+            <div class="user-info">
+                <div class="user-avatar" id="profile-photo-btn">
+                    <img src="/api/user/photo?t={{ timestamp }}" alt="{{ username }}" id="userProfileImage" onerror="this.src='/static/images/avatar.png'">
                 </div>
-                <div class="chat-header-title">Имя чата</div>
+                <div class="user-details">
+                    <div class="user-name">{{ username }}</div>
+                    <div class="user-email">Онлайн</div>
+                </div>
+                <div class="user-controls">
+                    <button class="theme-toggle" id="themeToggle">
+                        <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
+                    </button>
+                    <div class="options-icon">⋮</div>
+                    <div class="refresh-icon">↻</div>
+                </div>
             </div>
-            <div class="chat-header-actions">
-                <div class="chat-header-icon">📞</div>
-                <div class="chat-header-icon">📎</div>
-                <div class="chat-header-icon">⋮</div>
+            
+            <div class="search-container">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" placeholder="Поиск...">
+            </div>
+            
+            <div class="user-icons">
+                <div class="user-icon" title="Новый чат" id="new-chat-btn">💬</div>
+                <div class="user-icon" title="Новая группа">👥</div>
+            </div>
+            
+            <div class="chat-list">
+                <div class="no-chats">Нет активных чатов</div>
             </div>
         </div>
         
-        <div class="messages-container">
-            <!-- Сообщения будут добавляться здесь -->
-        </div>
-        
-        <div class="message-form-container">
-            <div class="selected-file">
-                <!-- Информация о выбранном файле будет здесь -->
-            </div>
-            <form id="message-form">
-                <button type="button" id="attach-file">📎</button>
-                <input type="file" id="file-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
-                <div class="message-input-container">
-                    <textarea id="message-input" placeholder="Введите сообщение..."></textarea>
+        <!-- Правая панель с содержимым чата -->
+        <div class="chat-panel">
+            <!-- Содержимое, отображаемое при отсутствии активного чата -->
+            <div class="welcome-screen" id="welcome-screen">
+                <div class="chat-logo">
+                    <span class="chat-logo-icon">💬</span>
                 </div>
-                <button type="button" id="send-message-btn">➤</button>
-            </form>
+                <div class="chat-title">WhatsappAIT</div>
+                <div class="chat-subtitle">Выберите контакт из списка чатов или создайте новый чат для начала общения</div>
+                <button class="action-button" id="new-chat-main-btn">Начать новый чат</button>
+            </div>
+            
+            <!-- Интерфейс активного чата -->
+            <div id="chat-interface" class="chat-interface">
+                <div class="chat-header">
+                    <div class="chat-header-info">
+                        <div class="chat-header-avatar">
+                            <img src="/static/images/avatar.png" alt="avatar" id="chat-avatar">
+                        </div>
+                        <div class="chat-header-title">Выберите чат</div>
+                    </div>
+                    <div class="chat-header-actions">
+                        <div class="chat-header-icon">📞</div>
+                        <div class="chat-header-icon">📎</div>
+                        <div class="chat-header-icon">⋮</div>
+                    </div>
+                </div>
+                
+                <div class="messages-container">
+                    <!-- Сообщения будут добавляться здесь -->
+                    <div class="no-chat-selected">Выберите чат, чтобы начать общение</div>
+                </div>
+                
+                <div class="message-form-container">
+                    <div class="selected-file">
+                        <!-- Информация о выбранном файле будет здесь -->
+                    </div>
+                    <form id="message-form">
+                        <button type="button" id="attach-file">📎</button>
+                        <input type="file" id="file-input" accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                        <div class="message-input-container">
+                            <textarea id="message-input" placeholder="Введите сообщение..."></textarea>
+                        </div>
+                        <button type="button" id="send-message-btn">➤</button>
+                    </form>
+                </div>
+            </div>
         </div>
     </div>
 

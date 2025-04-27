@@ -501,3 +501,121 @@ def get_message_media(message_id):
         mimetype=mime_type,
         as_attachment=False
     )
+
+@chat_bp.route('/api/chat/<int:chat_id>/send_message', methods=['POST'])
+def send_message(chat_id):
+    """Send a new message to a chat"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    # Проверяем, имеет ли пользователь доступ к чату
+    conn = get_db_connection()
+    access = False
+    
+    # Проверяем, является ли это личным диалогом пользователя
+    dialog = conn.execute('''
+        SELECT id FROM dialogs
+        WHERE chat_id = ? AND (user1_id = ? OR user2_id = ?)
+    ''', (chat_id, current_user_id, current_user_id)).fetchone()
+    
+    if dialog:
+        access = True
+    else:
+        # Проверяем, является ли пользователь участником группового чата
+        group = conn.execute('''
+            SELECT gc.id FROM group_chats gc
+            JOIN group_members gm ON gc.id = gm.group_chat_id
+            WHERE gc.chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+        ''', (chat_id, current_user_id)).fetchone()
+        
+        if group:
+            access = True
+    
+    if not access:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к чату"}), 403
+    
+    # Получаем данные сообщения
+    content = ''
+    if request.is_json:
+        data = request.get_json()
+        content = data.get('content', '')
+        reply_to = data.get('reply_to')
+        forwarded_from = data.get('forwarded_from')
+    else:
+        content = request.form.get('content', '')
+        reply_to = request.form.get('reply_to')
+        forwarded_from = request.form.get('forwarded_from')
+    
+    # Обработка медиафайла, если есть
+    media_content = None
+    media_type = None
+    
+    if 'media' in request.files:
+        media_file = request.files['media']
+        if media_file.filename:
+            media_content = media_file.read()
+            # Определяем тип медиа по расширению файла
+            ext = os.path.splitext(media_file.filename)[1].lower()
+            if ext in ['.jpg', '.jpeg', '.png', '.gif']:
+                media_type = 'image'
+            elif ext in ['.mp4', '.avi', '.mov']:
+                media_type = 'video'
+            elif ext in ['.mp3', '.wav', '.ogg']:
+                media_type = 'audio'
+            else:
+                media_type = 'file'
+    
+    # Проверка на пустое сообщение
+    if not content and not media_content:
+        conn.close()
+        return jsonify({"success": False, "message": "Сообщение не может быть пустым"}), 400
+    
+    try:
+        # Создаем новое сообщение
+        conn.execute('''
+            INSERT INTO messages (
+                chat_id, sender_id, content, 
+                media_content, media_type, 
+                reply_to, forwarded_from
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            chat_id, current_user_id, content, 
+            media_content, media_type, 
+            reply_to, forwarded_from
+        ))
+        
+        message_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        
+        # Получаем информацию о созданном сообщении
+        message = conn.execute('''
+            SELECT m.id, m.content, m.sender_id, u.nickname as sender_name,
+                m.timestamp, m.media_type
+            FROM messages m
+            JOIN users u ON m.sender_id = u.id
+            WHERE m.id = ?
+        ''', (message_id,)).fetchone()
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": {
+                "id": message['id'],
+                "content": message['content'],
+                "sender_id": message['sender_id'],
+                "sender_name": message['sender_name'],
+                "timestamp": message['timestamp'],
+                "media_type": message['media_type'],
+                "has_media": message['media_type'] is not None,
+                "is_own": True
+            }
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при отправке сообщения: {str(e)}"}), 500

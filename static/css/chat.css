@@ -87,30 +87,24 @@
 }
 
 /* Интерфейс чата */
-#chat-interface {
-    display: none;
+.chat-interface {
+    display: flex;
     flex-direction: column;
     height: 100%;
     width: 100%;
-    position: absolute;
-    top: 0;
-    left: 0;
+    position: relative;
     background-color: var(--bg-color);
-    z-index: 5;
+    z-index: 2;
 }
 
 .chat-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     padding: 10px 15px;
     background-color: var(--header-bg);
     color: var(--header-text);
-}
-
-#back-to-chats {
-    margin-right: 15px;
-    cursor: pointer;
-    font-size: 20px;
+    border-bottom: 1px solid var(--sidebar-border);
 }
 
 .chat-header-info {
@@ -138,12 +132,12 @@
 }
 
 .chat-header-actions {
-    margin-left: auto;
+    display: flex;
+    gap: 15px;
 }
 
 .chat-header-icon {
     color: var(--header-text);
-    margin-left: 15px;
     cursor: pointer;
     font-size: 18px;
 }

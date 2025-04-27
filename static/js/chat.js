@@ -209,11 +209,28 @@ function openChat(chatId, chatType, chatName) {
     // Сохраняем ID текущего чата
     currentChatId = chatId;
     
+    // Сохраняем информацию о чате в localStorage
+    localStorage.setItem('lastChatId', chatId);
+    localStorage.setItem('lastChatType', chatType);
+    localStorage.setItem('lastChatName', chatName);
+    
     // Обновляем заголовок чата
     document.querySelector('.chat-header-title').textContent = chatName;
     
-    // Скрываем основное содержимое и показываем чат
-    hideMainContent();
+    // Обновляем аватар чата
+    const chatAvatar = document.getElementById('chat-avatar');
+    if (chatAvatar) {
+        const avatarUrl = chatType === 'group' 
+            ? `/api/chat/group_photo/${chatId}` 
+            : `/api/user/photo/${chatId}`;
+        chatAvatar.src = avatarUrl;
+        chatAvatar.onerror = function() {
+            this.src = '/static/images/avatar.png';
+        };
+    }
+    
+    // Скрываем экран приветствия и показываем чат
+    hideWelcomeScreen();
     showChat();
     
     // Загружаем сообщения
@@ -222,13 +239,73 @@ function openChat(chatId, chatType, chatName) {
     // Добавляем атрибуты к форме отправки сообщения
     document.getElementById('message-form').dataset.chatId = chatId;
     document.getElementById('message-form').dataset.chatType = chatType;
+    
+    // На мобильных устройствах скрываем сайдбар
+    if (window.innerWidth <= 768) {
+        document.querySelector('.sidebar').classList.remove('visible');
+    }
+    
+    // Делаем интерфейс чата активным
+    document.body.classList.add('chat-active');
+    
+    // Фокусируемся на поле ввода
+    document.getElementById('message-input').focus();
+}
+
+// Получить текущий ID чата
+function getCurrentChatId() {
+    return currentChatId;
 }
 
 // Закрытие текущего чата
 function closeCurrentChat() {
     currentChatId = null;
     lastMessageId = null;
-    document.querySelector('.messages-container').innerHTML = '';
+    document.querySelector('.messages-container').innerHTML = '<div class="no-chat-selected">Выберите чат, чтобы начать общение</div>';
+    document.querySelector('.chat-header-title').textContent = 'Выберите чат';
+    document.getElementById('chat-avatar').src = '/static/images/avatar.png';
+    showWelcomeScreen();
+    document.body.classList.remove('chat-active');
+}
+
+// Показать экран приветствия
+function showWelcomeScreen() {
+    const welcomeScreen = document.getElementById('welcome-screen');
+    if (welcomeScreen) {
+        welcomeScreen.style.display = 'flex';
+    }
+}
+
+// Скрыть экран приветствия
+function hideWelcomeScreen() {
+    const welcomeScreen = document.getElementById('welcome-screen');
+    if (welcomeScreen) {
+        welcomeScreen.style.display = 'none';
+    }
+}
+
+// Показать интерфейс чата
+function showChat() {
+    const chatInterface = document.getElementById('chat-interface');
+    if (chatInterface) {
+        chatInterface.style.display = 'flex';
+    }
+}
+
+// Скрыть интерфейс чата
+function hideChat() {
+    showWelcomeScreen();
+    closeCurrentChat();
+}
+
+// Показать основное содержимое (логотип и т.д.)
+function showMainContent() {
+    showWelcomeScreen();
+}
+
+// Скрыть основное содержимое
+function hideMainContent() {
+    hideWelcomeScreen();
 }
 
 // Загрузка сообщений чата
@@ -423,7 +500,10 @@ function createMessageElement(message) {
 
 // Отправка сообщения
 async function sendMessage() {
-    if (!currentChatId) return;
+    if (!currentChatId) {
+        alert('Выберите чат для отправки сообщения');
+        return;
+    }
     
     const messageInput = document.getElementById('message-input');
     const fileInput = document.getElementById('file-input');
@@ -446,13 +526,16 @@ async function sendMessage() {
     }
     
     try {
+        // Показываем анимацию отправки (можно добавить)
+        messageInput.disabled = true;
+        
         const response = await fetch(`/api/chat/${currentChatId}/send_message`, {
             method: 'POST',
             body: formData
         });
         
         if (!response.ok) {
-            throw new Error('Ошибка отправки сообщения');
+            throw new Error(`Ошибка отправки сообщения: ${response.status}`);
         }
         
         const data = await response.json();
@@ -467,11 +550,14 @@ async function sendMessage() {
             updateCurrentChatMessages();
         } else {
             console.error('Ошибка при отправке сообщения:', data.message);
-            alert('Не удалось отправить сообщение');
+            alert('Не удалось отправить сообщение: ' + data.message);
         }
     } catch (error) {
         console.error('Ошибка при отправке сообщения:', error);
-        alert('Ошибка при отправке сообщения');
+        alert('Ошибка при отправке сообщения: ' + error.message);
+    } finally {
+        messageInput.disabled = false;
+        messageInput.focus();
     }
 }
 
@@ -512,45 +598,11 @@ function formatFileSize(bytes) {
     else return (bytes / 1048576).toFixed(2) + ' МБ';
 }
 
-// Показать интерфейс чата
-function showChat() {
-    const chatInterface = document.getElementById('chat-interface');
-    if (chatInterface) {
-        chatInterface.style.display = 'flex';
-    }
-}
-
-// Скрыть интерфейс чата
-function hideChat() {
-    const chatInterface = document.getElementById('chat-interface');
-    if (chatInterface) {
-        chatInterface.style.display = 'none';
-    }
-    
-    // Сбрасываем текущий чат
-    closeCurrentChat();
-}
-
-// Показать основное содержимое (логотип и т.д.)
-function showMainContent() {
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent) {
-        mainContent.style.display = 'flex';
-    }
-}
-
-// Скрыть основное содержимое
-function hideMainContent() {
-    const mainContent = document.querySelector('.main-content');
-    if (mainContent) {
-        mainContent.style.display = 'none';
-    }
-}
-
 // Экспорт функций для доступа из других модулей
 window.chatModule = {
     initChatComponent,
     openChat,
     closeCurrentChat,
-    updateChatsList
+    updateChatsList,
+    getCurrentChatId
 };

@@ -41,6 +41,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.toggle('expanded');
             }
         });
+
+        // Создаем кнопку для показа/скрытия сайдбара
+        const toggleBtn = document.createElement('div');
+        toggleBtn.className = 'sidebar-toggle';
+        toggleBtn.innerHTML = '☰';
+        document.body.appendChild(toggleBtn);
+        
+        toggleBtn.addEventListener('click', function() {
+            document.querySelector('.sidebar').classList.toggle('visible');
+        });
+        
+        // Показываем сайдбар по умолчанию, если нет активного чата
+        if (!window.chatModule || !window.chatModule.getCurrentChatId()) {
+            document.querySelector('.sidebar').classList.add('visible');
+        }
     }
 
     // Кнопка нового чата
@@ -147,5 +162,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Инициализация компонента чата
     if (window.chatModule && typeof window.chatModule.initChatComponent === 'function') {
         window.chatModule.initChatComponent();
+        
+        // Проверяем был ли выбран чат ранее (например, сохраненный в localStorage)
+        const lastChatId = localStorage.getItem('lastChatId');
+        const lastChatType = localStorage.getItem('lastChatType');
+        const lastChatName = localStorage.getItem('lastChatName');
+        
+        if (lastChatId && lastChatType && lastChatName) {
+            setTimeout(() => {
+                window.chatModule.openChat(lastChatId, lastChatType, lastChatName);
+            }, 1000);
+        }
     }
 });
