@@ -619,3 +619,593 @@ def send_message(chat_id):
         conn.rollback()
         conn.close()
         return jsonify({"success": False, "message": f"Ошибка при отправке сообщения: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/group_info/<int:group_id>', methods=['GET'])
+def get_group_info(group_id):
+    """Get detailed information about a group"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    conn = get_db_connection()
+    
+    # Проверяем, является ли пользователь участником этой группы
+    member = conn.execute('''
+        SELECT gm.id FROM group_members gm
+        WHERE gm.group_chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not member:
+        conn.close()
+        return jsonify({"success": False, "message": "Нет доступа к группе"}), 403
+    
+    # Получаем информацию о группе
+    group_info = conn.execute('''
+        SELECT gc.id, c.chat_name as name, gc.description, gc.creator_id,
+               u.nickname as creator_name, c.created_at
+        FROM group_chats gc
+        JOIN chats c ON gc.chat_id = c.id
+        JOIN users u ON gc.creator_id = u.id
+        WHERE gc.id = ?
+    ''', (group_id,)).fetchone()
+    
+    if not group_info:
+        conn.close()
+        return jsonify({"success": False, "message": "Группа не найдена"}), 404
+    
+    # Проверяем, является ли текущий пользователь администратором
+    admin_check = conn.execute('''
+        SELECT admin_level FROM group_admins
+        WHERE group_chat_id = ? AND user_id = ?
+    ''', (group_id, current_user_id)).fetchone()
+    
+    is_admin = admin_check is not None and admin_check['admin_level'] > 0
+    is_creator = admin_check is not None and admin_check['admin_level'] == 2
+    
+    # Получаем список участников группы
+    members = conn.execute('''
+        SELECT gm.user_id, u.nickname, 
+               COALESCE(ga.admin_level, 0) as admin_level,
+               gm.joined_at
+        FROM group_members gm
+        JOIN users u ON gm.user_id = u.id
+        LEFT JOIN group_admins ga ON gm.group_chat_id = ga.group_chat_id AND gm.user_id = ga.user_id
+        WHERE gm.group_chat_id = ? AND gm.status = 'active'
+        ORDER BY admin_level DESC, nickname ASC
+    ''', (group_id,)).fetchall()
+    
+    members_list = []
+    for member in members:
+        members_list.append({
+            "user_id": member['user_id'],
+            "nickname": member['nickname'],
+            "admin_level": member['admin_level'],
+            "joined_at": member['joined_at']
+        })
+    
+    conn.close()
+    
+    return jsonify({
+        "success": True,
+        "group_info": {
+            "id": group_info['id'],
+            "name": group_info['name'],
+            "description": group_info['description'],
+            "creator_id": group_info['creator_id'],
+            "creator_name": group_info['creator_name'],
+            "created_at": group_info['created_at']
+        },
+        "members": members_list,
+        "current_user_id": current_user_id,
+        "is_admin": is_admin,
+        "is_creator": is_creator
+    })
+
+@chat_bp.route('/api/chat/update_group/<int:group_id>', methods=['POST'])
+def update_group(group_id):
+    """Update group information"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    conn = get_db_connection()
+    
+    # Проверяем, имеет ли пользователь права администратора
+    admin_check = conn.execute('''
+        SELECT admin_level FROM group_admins
+        WHERE group_chat_id = ? AND user_id = ? AND admin_level > 0
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not admin_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Недостаточно прав для изменения группы"}), 403
+    
+    # Получаем данные для обновления
+    name = request.form.get('name')
+    description = request.form.get('description', '')
+    
+    if not name:
+        conn.close()
+        return jsonify({"success": False, "message": "Название группы не может быть пустым"}), 400
+    
+    try:
+        # Получаем ID чата для этой группы
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        # Обновляем название в таблице chats
+        conn.execute('UPDATE chats SET chat_name = ? WHERE id = ?', 
+                    (name, chat_id))
+        
+        # Обновляем описание в таблице group_chats
+        conn.execute('UPDATE group_chats SET description = ? WHERE id = ?', 
+                    (description, group_id))
+        
+        # Обновляем фото группы, если оно предоставлено
+        if 'group_photo' in request.files:
+            group_photo = request.files['group_photo']
+            if group_photo.filename:
+                group_photo_data = group_photo.read()
+                conn.execute('UPDATE group_chats SET group_photo = ? WHERE id = ?', 
+                            (group_photo_data, group_id))
+        
+        conn.commit()
+        
+        # Создаем системное сообщение об обновлении группы
+        conn.execute('''
+            INSERT INTO messages (chat_id, sender_id, content)
+            VALUES (?, ?, ?)
+        ''', (chat_id, current_user_id, f"Информация о группе обновлена"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Группа успешно обновлена"
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при обновлении группы: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/leave_group/<int:group_id>', methods=['POST'])
+def leave_group(group_id):
+    """Leave the group"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    conn = get_db_connection()
+    
+    # Проверяем, является ли пользователь участником этой группы
+    member = conn.execute('''
+        SELECT gm.id FROM group_members gm
+        WHERE gm.group_chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not member:
+        conn.close()
+        return jsonify({"success": False, "message": "Вы не являетесь участником этой группы"}), 403
+    
+    # Проверяем, является ли пользователь создателем группы
+    creator_check = conn.execute('''
+        SELECT id FROM group_chats
+        WHERE id = ? AND creator_id = ?
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if creator_check:
+        conn.close()
+        return jsonify({
+            "success": False, 
+            "message": "Вы являетесь создателем группы и не можете покинуть её. Удалите группу или передайте права администратора."
+        }), 400
+    
+    try:
+        # Получаем ID чата для этой группы
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        # Меняем статус участника на 'left'
+        conn.execute('''
+            UPDATE group_members SET status = 'left'
+            WHERE group_chat_id = ? AND user_id = ?
+        ''', (group_id, current_user_id))
+        
+        # Удаляем права администратора, если они были
+        conn.execute('''
+            DELETE FROM group_admins
+            WHERE group_chat_id = ? AND user_id = ?
+        ''', (group_id, current_user_id))
+        
+        # Создаем системное сообщение об уходе из группы
+        user_info = conn.execute('SELECT nickname FROM users WHERE id = ?', 
+                                (current_user_id,)).fetchone()
+        
+        conn.execute('''
+            INSERT INTO messages (chat_id, sender_id, content)
+            VALUES (?, ?, ?)
+        ''', (chat_id, current_user_id, f"{user_info['nickname']} покинул(а) группу"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Вы успешно покинули группу"
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при выходе из группы: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/delete_group/<int:group_id>', methods=['POST'])
+def delete_group(group_id):
+    """Delete the group - only for creator"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    
+    conn = get_db_connection()
+    
+    # Проверяем, является ли пользователь создателем группы
+    creator_check = conn.execute('''
+        SELECT id FROM group_chats
+        WHERE id = ? AND creator_id = ?
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not creator_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Только создатель группы может удалить её"}), 403
+    
+    try:
+        # Получаем ID чата для этой группы
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        # Меняем статус всех участников на 'removed'
+        conn.execute('''
+            UPDATE group_members SET status = 'removed'
+            WHERE group_chat_id = ?
+        ''', (group_id,))
+        
+        # Помечаем чат как удаленный
+        conn.execute('UPDATE chats SET is_deleted = 1 WHERE id = ?', (chat_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Группа успешно удалена"
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при удалении группы: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/remove_member/<int:group_id>', methods=['POST'])
+def remove_member(group_id):
+    """Remove a member from the group - only for admins"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    data = request.get_json()
+    if not data or 'user_id' not in data:
+        return jsonify({"success": False, "message": "Не указан ID участника"}), 400
+    
+    current_user_id = session.get('user_id')
+    user_id_to_remove = data['user_id']
+    
+    conn = get_db_connection()
+    
+    # Проверяем, имеет ли пользователь права администратора
+    admin_check = conn.execute('''
+        SELECT admin_level FROM group_admins
+        WHERE group_chat_id = ? AND user_id = ? AND admin_level > 0
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not admin_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Недостаточно прав для удаления участников"}), 403
+    
+    # Проверяем, существует ли участник в группе
+    member_check = conn.execute('''
+        SELECT gm.id, ga.admin_level FROM group_members gm
+        LEFT JOIN group_admins ga ON gm.group_chat_id = ga.group_chat_id AND gm.user_id = ga.user_id
+        WHERE gm.group_chat_id = ? AND gm.user_id = ? AND gm.status = 'active'
+    ''', (group_id, user_id_to_remove)).fetchone()
+    
+    if not member_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Участник не найден или уже удален из группы"}), 404
+    
+    # Проверяем, не пытается ли администратор удалить создателя группы
+    target_admin_level = member_check['admin_level'] or 0
+    if target_admin_level == 2:  # 2 - уровень создателя группы
+        conn.close()
+        return jsonify({"success": False, "message": "Невозможно удалить создателя группы"}), 403
+    
+    # Обычный администратор не может удалить другого администратора
+    if target_admin_level == 1 and admin_check['admin_level'] < 2:
+        conn.close()
+        return jsonify({"success": False, "message": "Нельзя удалить другого администратора"}), 403
+    
+    try:
+        # Получаем ID чата и информацию об участнике
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        user_info = conn.execute('SELECT nickname FROM users WHERE id = ?', 
+                                (user_id_to_remove,)).fetchone()
+        
+        # Меняем статус участника на 'removed'
+        conn.execute('''
+            UPDATE group_members SET status = 'removed'
+            WHERE group_chat_id = ? AND user_id = ?
+        ''', (group_id, user_id_to_remove))
+        
+        # Удаляем права администратора, если они были
+        conn.execute('''
+            DELETE FROM group_admins
+            WHERE group_chat_id = ? AND user_id = ?
+        ''', (group_id, user_id_to_remove))
+        
+        # Создаем системное сообщение об удалении участника
+        admin_info = conn.execute('SELECT nickname FROM users WHERE id = ?', 
+                                (current_user_id,)).fetchone()
+        
+        conn.execute('''
+            INSERT INTO messages (chat_id, sender_id, content)
+            VALUES (?, ?, ?)
+        ''', (chat_id, current_user_id, f"{user_info['nickname']} был(а) удален(а) из группы пользователем {admin_info['nickname']}"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Участник успешно удален из группы"
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при удалении участника: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/toggle_admin/<int:group_id>', methods=['POST'])
+def toggle_admin(group_id):
+    """Toggle admin status of a group member - only for group creator"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    data = request.get_json()
+    if not data or 'user_id' not in data or 'make_admin' not in data:
+        return jsonify({"success": False, "message": "Не указаны необходимые данные"}), 400
+    
+    current_user_id = session.get('user_id')
+    target_user_id = data['user_id']
+    make_admin = data['make_admin']
+    
+    conn = get_db_connection()
+    
+    # Проверяем, является ли пользователь создателем группы
+    creator_check = conn.execute('''
+        SELECT ga.admin_level FROM group_admins ga
+        WHERE ga.group_chat_id = ? AND ga.user_id = ? AND ga.admin_level = 2
+    ''', (group_id, current_user_id)).fetchone()
+    
+    # Админ уровня 2 (создатель) может изменять права администратора
+    if not creator_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Только создатель группы может изменять права администратора"}), 403
+    
+    # Нельзя изменить свой статус (создатель не может перестать быть создателем)
+    if target_user_id == current_user_id:
+        conn.close()
+        return jsonify({"success": False, "message": "Нельзя изменить свой статус администратора"}), 400
+    
+    # Проверяем, существует ли участник в группе
+    member_check = conn.execute('''
+        SELECT id FROM group_members
+        WHERE group_chat_id = ? AND user_id = ? AND status = 'active'
+    ''', (group_id, target_user_id)).fetchone()
+    
+    if not member_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Участник не найден или не находится в группе"}), 404
+    
+    try:
+        # Получаем ID чата для этой группы
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        user_info = conn.execute('SELECT nickname FROM users WHERE id = ?', 
+                                (target_user_id,)).fetchone()
+        
+        if make_admin:
+            # Добавляем пользователя как администратора (уровень 1 - обычный администратор)
+            conn.execute('''
+                INSERT OR REPLACE INTO group_admins (group_chat_id, user_id, admin_level)
+                VALUES (?, ?, 1)
+            ''', (group_id, target_user_id))
+            
+            # Создаем системное сообщение о назначении администратора
+            conn.execute('''
+                INSERT INTO messages (chat_id, sender_id, content)
+                VALUES (?, ?, ?)
+            ''', (chat_id, current_user_id, f"{user_info['nickname']} назначен(а) администратором группы"))
+        else:
+            # Удаляем права администратора
+            conn.execute('''
+                DELETE FROM group_admins
+                WHERE group_chat_id = ? AND user_id = ?
+            ''', (group_id, target_user_id))
+            
+            # Создаем системное сообщение о снятии с должности администратора
+            conn.execute('''
+                INSERT INTO messages (chat_id, sender_id, content)
+                VALUES (?, ?, ?)
+            ''', (chat_id, current_user_id, f"{user_info['nickname']} больше не является администратором группы"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": f"Статус администратора успешно {'предоставлен' if make_admin else 'удален'}"
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при изменении статуса администратора: {str(e)}"}), 500
+
+@chat_bp.route('/api/chat/search_contacts', methods=['GET'])
+def search_contacts():
+    """Search for contacts to add to a group"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    current_user_id = session.get('user_id')
+    query = request.args.get('query', '').strip().lower()
+    
+    conn = get_db_connection()
+    
+    # Получаем контакты пользователя (из диалогов)
+    sql = '''
+        SELECT DISTINCT u.id, u.nickname
+        FROM users u
+        JOIN dialogs d ON (d.user1_id = u.id OR d.user2_id = u.id)
+        WHERE 
+            (d.user1_id = ? OR d.user2_id = ?) AND 
+            u.id != ?
+    '''
+    params = [current_user_id, current_user_id, current_user_id]
+    
+    # Добавляем условие поиска, если запрос не пустой
+    if query:
+        sql += ' AND LOWER(u.nickname) LIKE ?'
+        params.append(f'%{query}%')
+    
+    contacts = conn.execute(sql, params).fetchall()
+    
+    contacts_list = []
+    for contact in contacts:
+        contacts_list.append({
+            "id": contact['id'],
+            "nickname": contact['nickname']
+        })
+    
+    conn.close()
+    
+    return jsonify({
+        "success": True,
+        "contacts": contacts_list
+    })
+
+@chat_bp.route('/api/chat/add_members/<int:group_id>', methods=['POST'])
+def add_members(group_id):
+    """Add new members to a group - only for admins"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    data = request.get_json()
+    if not data or 'user_ids' not in data:
+        return jsonify({"success": False, "message": "Не указаны ID пользователей"}), 400
+    
+    current_user_id = session.get('user_id')
+    user_ids = data['user_ids']
+    
+    if not user_ids:
+        return jsonify({"success": False, "message": "Список пользователей пуст"}), 400
+    
+    conn = get_db_connection()
+    
+    # Проверяем, имеет ли пользователь права администратора
+    admin_check = conn.execute('''
+        SELECT admin_level FROM group_admins
+        WHERE group_chat_id = ? AND user_id = ? AND admin_level > 0
+    ''', (group_id, current_user_id)).fetchone()
+    
+    if not admin_check:
+        conn.close()
+        return jsonify({"success": False, "message": "Недостаточно прав для добавления участников"}), 403
+    
+    try:
+        # Получаем ID чата для этой группы
+        chat_id = conn.execute('SELECT chat_id FROM group_chats WHERE id = ?', 
+                              (group_id,)).fetchone()['chat_id']
+        
+        # Добавляем новых участников
+        added_users = []
+        for user_id in user_ids:
+            # Проверяем, существует ли такой пользователь
+            user_check = conn.execute('SELECT id, nickname FROM users WHERE id = ?', 
+                                    (user_id,)).fetchone()
+            
+            if not user_check:
+                continue  # Пропускаем несуществующих пользователей
+            
+            # Проверяем, не является ли пользователь уже участником группы
+            member_check = conn.execute('''
+                SELECT id FROM group_members 
+                WHERE group_chat_id = ? AND user_id = ? AND status = 'active'
+            ''', (group_id, user_id)).fetchone()
+            
+            if member_check:
+                continue  # Пользователь уже в группе
+                
+            # Проверяем, был ли пользователь ранее в группе и просто вышел или был удален
+            prev_member = conn.execute('''
+                SELECT id, status FROM group_members 
+                WHERE group_chat_id = ? AND user_id = ?
+            ''', (group_id, user_id)).fetchone()
+            
+            if prev_member:
+                # Если пользователь ранее был в группе, меняем его статус на active
+                conn.execute('''
+                    UPDATE group_members SET status = 'active', invited_by = ?
+                    WHERE group_chat_id = ? AND user_id = ?
+                ''', (current_user_id, group_id, user_id))
+            else:
+                # Добавляем нового участника
+                conn.execute('''
+                    INSERT INTO group_members (group_chat_id, user_id, invited_by, status)
+                    VALUES (?, ?, ?, 'active')
+                ''', (group_id, user_id, current_user_id))
+            
+            added_users.append({
+                "id": user_id,
+                "nickname": user_check['nickname']
+            })
+        
+        # Создаем системное сообщение о добавлении новых участников
+        if added_users:
+            added_names = ", ".join([user["nickname"] for user in added_users])
+            
+            conn.execute('''
+                INSERT INTO messages (chat_id, sender_id, content)
+                VALUES (?, ?, ?)
+            ''', (chat_id, current_user_id, f"В группу добавлены новые участники: {added_names}"))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "message": "Участники успешно добавлены",
+            "added_users": added_users
+        })
+        
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return jsonify({"success": False, "message": f"Ошибка при добавлении участников: {str(e)}"}), 500

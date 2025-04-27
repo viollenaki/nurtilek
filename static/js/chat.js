@@ -7,6 +7,10 @@ let chatUpdateInterval;
 let chatListUpdateInterval;
 let activeChatlUpdateInterval;
 let currentChatId = null;
+let currentChatType = null;
+let currentGroupId = null;
+let isCurrentUserAdmin = false;
+let currentGroupMembers = [];
 let lastMessageId = null;
 let lastUpdateTime = null;
 let cachedChats = [];
@@ -70,6 +74,19 @@ function initChatComponent() {
             showMainContent();
         });
     }
+    
+    // Обработчик клика на аватар чата (для управления группой)
+    const chatAvatar = document.getElementById('chat-avatar');
+    if (chatAvatar) {
+        chatAvatar.addEventListener('click', function() {
+            if (currentChatType === 'group' && currentGroupId) {
+                openGroupInfoModal(currentGroupId);
+            }
+        });
+    }
+    
+    // Инициализация модального окна информации о группе
+    initGroupInfoModal();
 }
 
 // Запуск периодического обновления чатов
@@ -242,6 +259,8 @@ function openChat(chatId, chatType, chatName, groupId = null) {
     
     // Сохраняем ID текущего чата
     currentChatId = chatId;
+    currentChatType = chatType;
+    currentGroupId = groupId;
     lastMessageId = null; // Сбрасываем ID последнего сообщения
     
     // Сохраняем информацию о чате в localStorage
@@ -1064,6 +1083,619 @@ function checkUserActivity() {
     }
 }
 
+// Инициализация модального окна информации о группе
+function initGroupInfoModal() {
+    const groupInfoModal = document.getElementById('group-info-modal');
+    const groupInfoCloseBtn = document.getElementById('group-info-close-btn');
+    const groupInfoSaveBtn = document.getElementById('group-info-save-btn');
+    const exitGroupBtn = document.getElementById('exit-group-btn');
+    const deleteGroupBtn = document.getElementById('delete-group-btn');
+    const addMemberBtn = document.getElementById('add-member-btn');
+    const groupPhotoInput = document.getElementById('group-info-photo-input');
+    const photoOverlay = document.getElementById('group-photo-change-overlay');
+    
+    // Закрытие модального окна
+    groupInfoCloseBtn?.addEventListener('click', function() {
+        groupInfoModal.classList.remove('active');
+    });
+    
+    // Закрытие при клике вне модального окна
+    groupInfoModal?.addEventListener('click', function(e) {
+        if (e.target === groupInfoModal) {
+            groupInfoModal.classList.remove('active');
+        }
+    });
+    
+    // Обработка загрузки новой фотографии
+    photoOverlay?.addEventListener('click', function() {
+        if (isCurrentUserAdmin) {
+            groupPhotoInput.click();
+        }
+    });
+    
+    // Предпросмотр выбранного изображения
+    groupPhotoInput?.addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('group-info-preview-image').src = e.target.result;
+            };
+            reader.readAsDataURL(this.files[0]);
+        }
+    });
+    
+    // Сохранение изменений в группе
+    groupInfoSaveBtn?.addEventListener('click', function() {
+        saveGroupChanges();
+    });
+    
+    // Добавление новых участников
+    addMemberBtn?.addEventListener('click', function() {
+        openAddMembersModal();
+    });
+    
+    // Выход из группы
+    exitGroupBtn?.addEventListener('click', function() {
+        if (confirm('Вы действительно хотите покинуть группу?')) {
+            exitFromGroup(currentGroupId);
+        }
+    });
+    
+    // Удаление группы
+    deleteGroupBtn?.addEventListener('click', function() {
+        if (confirm('Вы действительно хотите удалить группу? Это действие нельзя отменить.')) {
+            deleteGroup(currentGroupId);
+        }
+    });
+    
+    // Инициализация модального окна добавления участников
+    initAddMembersModal();
+}
+
+// Открыть модальное окно информации о группе
+async function openGroupInfoModal(groupId) {
+    const groupInfoModal = document.getElementById('group-info-modal');
+    const nameInput = document.getElementById('group-info-name');
+    const descInput = document.getElementById('group-info-description');
+    const membersCountSpan = document.getElementById('group-members-count');
+    const membersList = document.getElementById('group-members-list');
+    const creatorInfo = document.getElementById('group-creator-info');
+    const saveBtn = document.getElementById('group-info-save-btn');
+    const deleteBtn = document.getElementById('delete-group-btn');
+    const photoOverlay = document.getElementById('group-photo-change-overlay');
+    const addMemberBtn = document.getElementById('add-member-btn');
+    
+    try {
+        // Показываем индикатор загрузки
+        membersList.innerHTML = '<div class="loading">Загрузка данных группы...</div>';
+        
+        // Запрашиваем информацию о группе с сервера
+        const response = await fetch(`/api/chat/group_info/${groupId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.message || 'Не удалось загрузить информацию о группе');
+        }
+        
+        // Заполняем данными
+        const groupInfo = data.group_info;
+        nameInput.value = groupInfo.name;
+        descInput.value = groupInfo.description || '';
+        
+        // Загружаем фото группы с временной меткой для предотвращения кеширования
+        const timestamp = new Date().getTime();
+        document.getElementById('group-info-preview-image').src = `/api/chat/group_photo/${groupId}?t=${timestamp}`;
+        
+        // Отображаем информацию о создателе группы
+        creatorInfo.innerHTML = `
+            <div class="creator-avatar">
+                <img src="/api/user/photo/${groupInfo.creator_id}?t=${timestamp}" 
+                     alt="${groupInfo.creator_name}" 
+                     onerror="this.src='/static/images/avatar.png'">
+            </div>
+            <div class="creator-name">${groupInfo.creator_name}</div>
+        `;
+        
+        // Отображаем участников
+        const members = data.members;
+        membersCountSpan.textContent = members.length;
+        currentGroupMembers = members;
+        
+        let membersHTML = '';
+        members.forEach(member => {
+            const isAdmin = member.admin_level > 0;
+            const isCreator = member.admin_level === 2;
+            const isCurrentUser = member.user_id === data.current_user_id;
+            
+            membersHTML += `
+                <div class="member-item" data-user-id="${member.user_id}">
+                    <div class="member-avatar">
+                        <img src="/api/user/photo/${member.user_id}?t=${timestamp}" 
+                             alt="${member.nickname}" 
+                             onerror="this.src='/static/images/avatar.png'">
+                    </div>
+                    <div class="member-info">
+                        <div class="member-name">${member.nickname} ${isCurrentUser ? '(Вы)' : ''}</div>
+                        <div class="member-role">${isCreator ? 'Создатель' : (isAdmin ? 'Администратор' : 'Участник')}</div>
+                    </div>
+                    <div class="member-actions">
+                        ${!isCurrentUser && data.is_admin && !isCreator ? `
+                            <button class="member-action-btn member-admin-toggle" title="${isAdmin ? 'Убрать права администратора' : 'Сделать администратором'}" 
+                                    data-action="toggle-admin" data-user-id="${member.user_id}">
+                                ${isAdmin ? '⭐' : '☆'}
+                            </button>
+                            <button class="member-action-btn" title="Удалить из группы" 
+                                    data-action="remove" data-user-id="${member.user_id}">
+                                ✖
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        membersList.innerHTML = membersHTML || '<div class="no-results">Нет участников</div>';
+        
+        // Проверяем, является ли текущий пользователь администратором
+        isCurrentUserAdmin = data.is_admin;
+        
+        // Настраиваем интерфейс в зависимости от прав
+        nameInput.readOnly = !isCurrentUserAdmin;
+        descInput.readOnly = !isCurrentUserAdmin;
+        saveBtn.style.display = isCurrentUserAdmin ? 'block' : 'none';
+        photoOverlay.style.display = isCurrentUserAdmin ? 'flex' : 'none';
+        deleteBtn.style.display = data.is_creator ? 'block' : 'none';
+        addMemberBtn.style.display = isCurrentUserAdmin ? 'block' : 'none';
+        
+        // Добавляем обработчики для кнопок действий с участниками
+        document.querySelectorAll('.member-action-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const action = this.dataset.action;
+                const userId = this.dataset.userId;
+                
+                if (action === 'remove') {
+                    if (confirm('Вы действительно хотите удалить этого участника из группы?')) {
+                        removeMemberFromGroup(currentGroupId, userId);
+                    }
+                } else if (action === 'toggle-admin') {
+                    const isAdmin = this.textContent.trim() === '⭐';
+                    toggleMemberAdminStatus(currentGroupId, userId, !isAdmin);
+                }
+            });
+        });
+        
+        // Показываем модальное окно
+        groupInfoModal.classList.add('active');
+        
+    } catch (error) {
+        console.error('Ошибка при загрузке данных группы:', error);
+        alert('Не удалось загрузить информацию о группе: ' + error.message);
+    }
+}
+
+// Сохранение изменений в группе
+async function saveGroupChanges() {
+    try {
+        const nameInput = document.getElementById('group-info-name');
+        const descInput = document.getElementById('group-info-description');
+        const groupPhotoInput = document.getElementById('group-info-photo-input');
+        const messageElement = document.getElementById('group-info-message');
+        
+        const formData = new FormData();
+        formData.append('name', nameInput.value.trim());
+        formData.append('description', descInput.value.trim());
+        
+        if (groupPhotoInput.files && groupPhotoInput.files[0]) {
+            formData.append('group_photo', groupPhotoInput.files[0]);
+        }
+        
+        const response = await fetch(`/api/chat/update_group/${currentGroupId}`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Показываем сообщение об успехе
+            messageElement.textContent = 'Группа успешно обновлена';
+            messageElement.className = 'modal-message success';
+            messageElement.style.display = 'block';
+            
+            // Обновляем название чата в интерфейсе
+            document.querySelector('.chat-header-title').textContent = nameInput.value.trim();
+            
+            // Обновляем аватар чата с новой меткой времени
+            const timestamp = new Date().getTime();
+            const chatAvatar = document.getElementById('chat-avatar');
+            if (chatAvatar) {
+                chatAvatar.src = `/api/chat/group_photo/${currentGroupId}?t=${timestamp}`;
+            }
+            
+            // Скрываем сообщение через 3 секунды
+            setTimeout(() => {
+                messageElement.style.display = 'none';
+            }, 3000);
+            
+            // Обновляем список чатов
+            updateChatsList();
+            
+        } else {
+            throw new Error(data.message || 'Ошибка при обновлении группы');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при сохранении изменений группы:', error);
+        const messageElement = document.getElementById('group-info-message');
+        messageElement.textContent = 'Ошибка: ' + error.message;
+        messageElement.className = 'modal-message error';
+        messageElement.style.display = 'block';
+        
+        // Скрываем сообщение через 3 секунды
+        setTimeout(() => {
+            messageElement.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// Выход из группы
+async function exitFromGroup(groupId) {
+    try {
+        const response = await fetch(`/api/chat/leave_group/${groupId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Закрываем модальное окно группы
+            document.getElementById('group-info-modal').classList.remove('active');
+            
+            // Закрываем текущий чат
+            closeCurrentChat();
+            
+            // Обновляем список чатов
+            updateChatsList();
+            
+            alert('Вы успешно покинули группу');
+        } else {
+            throw new Error(data.message || 'Ошибка при выходе из группы');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при выходе из группы:', error);
+        alert('Не удалось покинуть группу: ' + error.message);
+    }
+}
+
+// Удаление группы
+async function deleteGroup(groupId) {
+    try {
+        const response = await fetch(`/api/chat/delete_group/${groupId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Закрываем модальное окно группы
+            document.getElementById('group-info-modal').classList.remove('active');
+            
+            // Закрываем текущий чат
+            closeCurrentChat();
+            
+            // Обновляем список чатов
+            updateChatsList();
+            
+            alert('Группа успешно удалена');
+        } else {
+            throw new Error(data.message || 'Ошибка при удалении группы');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при удалении группы:', error);
+        alert('Не удалось удалить группу: ' + error.message);
+    }
+}
+
+// Удаление участника из группы
+async function removeMemberFromGroup(groupId, userId) {
+    try {
+        const response = await fetch(`/api/chat/remove_member/${groupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Обновляем модальное окно группы
+            openGroupInfoModal(groupId);
+            
+        } else {
+            throw new Error(data.message || 'Ошибка при удалении участника');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при удалении участника:', error);
+        alert('Не удалось удалить участника: ' + error.message);
+    }
+}
+
+// Изменение статуса администратора участника
+async function toggleMemberAdminStatus(groupId, userId, makeAdmin) {
+    try {
+        const response = await fetch(`/api/chat/toggle_admin/${groupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                user_id: userId,
+                make_admin: makeAdmin
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Обновляем модальное окно группы
+            openGroupInfoModal(groupId);
+            
+        } else {
+            throw new Error(data.message || 'Ошибка при изменении статуса администратора');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при изменении статуса администратора:', error);
+        alert('Не удалось изменить статус администратора: ' + error.message);
+    }
+}
+
+// Инициализация модального окна добавления участников
+function initAddMembersModal() {
+    const addMembersModal = document.getElementById('add-members-modal');
+    const closeBtn = document.getElementById('add-members-close-btn');
+    const saveBtn = document.getElementById('add-members-save-btn');
+    const searchInput = document.getElementById('add-members-search-input');
+    
+    // Закрытие модального окна
+    closeBtn?.addEventListener('click', function() {
+        addMembersModal.classList.remove('active');
+    });
+    
+    // Закрытие при клике вне модального окна
+    addMembersModal?.addEventListener('click', function(e) {
+        if (e.target === addMembersModal) {
+            addMembersModal.classList.remove('active');
+        }
+    });
+    
+    // Поиск пользователей
+    let searchTimeout;
+    searchInput?.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        searchTimeout = setTimeout(() => {
+            searchContacts(query);
+        }, 300);
+    });
+    
+    // Сохранение (добавление участников)
+    saveBtn?.addEventListener('click', function() {
+        addSelectedMembers();
+    });
+}
+
+// Открыть модальное окно добавления участников
+function openAddMembersModal() {
+    const addMembersModal = document.getElementById('add-members-modal');
+    const selectedMembersList = document.getElementById('selected-members-list');
+    const countSpan = document.getElementById('selected-add-members-count');
+    
+    // Сбросить выбранных участников
+    selectedMembersList.innerHTML = '';
+    countSpan.textContent = '0';
+    window.selectedNewMembers = [];
+    
+    // Показать модальное окно
+    addMembersModal.classList.add('active');
+    
+    // Загрузить контакты
+    searchContacts('');
+}
+
+// Поиск контактов для добавления в группу
+async function searchContacts(query) {
+    const resultsContainer = document.getElementById('add-members-results');
+    const loadingIndicator = document.getElementById('add-members-loading');
+    
+    try {
+        // Показываем индикатор загрузки
+        loadingIndicator.style.display = 'block';
+        resultsContainer.style.display = 'none';
+        
+        // Запрос на сервер для поиска контактов
+        const response = await fetch(`/api/chat/search_contacts?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        // Скрываем индикатор загрузки
+        loadingIndicator.style.display = 'none';
+        resultsContainer.style.display = 'block';
+        
+        if (!data.success) {
+            throw new Error(data.message || 'Ошибка при поиске контактов');
+        }
+        
+        // Отображаем результаты поиска
+        if (data.contacts.length === 0) {
+            resultsContainer.innerHTML = '<div class="no-results">Контакты не найдены</div>';
+            return;
+        }
+        
+        // Фильтруем контакты, исключая уже добавленных в группу
+        const existingMemberIds = currentGroupMembers.map(m => m.user_id.toString());
+        const filteredContacts = data.contacts.filter(contact => 
+            !existingMemberIds.includes(contact.id.toString())
+        );
+        
+        if (filteredContacts.length === 0) {
+            resultsContainer.innerHTML = '<div class="no-results">Все ваши контакты уже в группе</div>';
+            return;
+        }
+        
+        // Формируем HTML
+        let contactsHTML = '';
+        filteredContacts.forEach(contact => {
+            // Проверяем, выбран ли контакт
+            const isSelected = window.selectedNewMembers && 
+                              window.selectedNewMembers.some(m => m.id === contact.id);
+            
+            contactsHTML += `
+                <div class="contact-item ${isSelected ? 'selected' : ''}" 
+                     data-user-id="${contact.id}" 
+                     data-nickname="${contact.nickname}">
+                    <div class="contact-avatar">
+                        <img src="/api/user/photo/${contact.id}" 
+                             alt="${contact.nickname}" 
+                             onerror="this.src='/static/images/avatar.png'">
+                    </div>
+                    <div class="contact-info">
+                        <div class="contact-name">${contact.nickname}</div>
+                    </div>
+                    <div class="contact-select">
+                        ${isSelected ? '✓' : ''}
+                    </div>
+                </div>
+            `;
+        });
+        
+        resultsContainer.innerHTML = contactsHTML;
+        
+        // Добавляем обработчики событий для выбора контактов
+        document.querySelectorAll('#add-members-results .contact-item').forEach(item => {
+            item.addEventListener('click', function() {
+                const userId = this.dataset.userId;
+                const nickname = this.dataset.nickname;
+                toggleSelectedMember(userId, nickname, this);
+            });
+        });
+        
+    } catch (error) {
+        console.error('Ошибка при поиске контактов:', error);
+        loadingIndicator.style.display = 'none';
+        resultsContainer.style.display = 'block';
+        resultsContainer.innerHTML = `<div class="no-results">Ошибка: ${error.message}</div>`;
+    }
+}
+
+// Выбор/отмена выбора участника для добавления
+function toggleSelectedMember(userId, nickname, element) {
+    if (!window.selectedNewMembers) {
+        window.selectedNewMembers = [];
+    }
+    
+    const selectedMembersList = document.getElementById('selected-members-list');
+    const countSpan = document.getElementById('selected-add-members-count');
+    
+    // Проверяем, выбран ли уже этот пользователь
+    const index = window.selectedNewMembers.findIndex(m => m.id === userId);
+    
+    if (index === -1) {
+        // Добавляем пользователя в список выбранных
+        window.selectedNewMembers.push({ id: userId, nickname: nickname });
+        element.classList.add('selected');
+        element.querySelector('.contact-select').textContent = '✓';
+        
+        // Добавляем в визуальный список
+        const memberItem = document.createElement('div');
+        memberItem.className = 'selected-member-item';
+        memberItem.dataset.userId = userId;
+        memberItem.innerHTML = `
+            <span>${nickname}</span>
+            <button class="remove-selected-member" data-user-id="${userId}">✕</button>
+        `;
+        selectedMembersList.appendChild(memberItem);
+        
+        // Добавляем обработчик для удаления из выбранных
+        memberItem.querySelector('.remove-selected-member').addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            const contactItem = document.querySelector(`#add-members-results .contact-item[data-user-id="${userId}"]`);
+            if (contactItem) {
+                contactItem.classList.remove('selected');
+                contactItem.querySelector('.contact-select').textContent = '';
+            }
+            
+            // Удаляем из массива
+            const index = window.selectedNewMembers.findIndex(m => m.id === userId);
+            if (index !== -1) {
+                window.selectedNewMembers.splice(index, 1);
+            }
+            
+            // Удаляем визуальный элемент
+            this.parentElement.remove();
+            
+            // Обновляем счетчик
+            countSpan.textContent = window.selectedNewMembers.length;
+        });
+    } else {
+        // Удаляем пользователя из списка выбранных
+        window.selectedNewMembers.splice(index, 1);
+        element.classList.remove('selected');
+        element.querySelector('.contact-select').textContent = '';
+        
+        // Удаляем из визуального списка
+        const memberItem = selectedMembersList.querySelector(`.selected-member-item[data-user-id="${userId}"]`);
+        if (memberItem) {
+            memberItem.remove();
+        }
+    }
+    
+    // Обновляем счетчик
+    countSpan.textContent = window.selectedNewMembers.length;
+}
+
+// Добавление выбранных участников в группу
+async function addSelectedMembers() {
+    if (!window.selectedNewMembers || window.selectedNewMembers.length === 0) {
+        alert('Выберите участников для добавления в группу');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/chat/add_members/${currentGroupId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                user_ids: window.selectedNewMembers.map(m => m.id)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Закрываем модальное окно добавления участников
+            document.getElementById('add-members-modal').classList.remove('active');
+            
+            // Обновляем модальное окно группы
+            openGroupInfoModal(currentGroupId);
+            
+        } else {
+            throw new Error(data.message || 'Ошибка при добавлении участников');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при добавлении участников:', error);
+        alert('Не удалось добавить участников: ' + error.message);
+    }
+}
+
 // Экспорт функций для доступа из других модулей
 window.chatModule = {
     initChatComponent,
@@ -1073,5 +1705,6 @@ window.chatModule = {
     getCurrentChatId,
     updateCurrentChatMessages,
     updateUserActivity,
-    keepSessionAlive
+    keepSessionAlive,
+    openGroupInfoModal
 };

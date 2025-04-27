@@ -12,12 +12,14 @@
     align-items: center;
     padding: 10px;
     border-radius: 8px;
-    transition: background-color 0.2s;
+    transition: background-color var(--transition-duration) var(--transition-timing),
+                transform 0.3s var(--transition-timing);
     cursor: pointer;
 }
 
 .chat-item:hover {
     background-color: rgba(0, 0, 0, 0.05);
+    transform: translateX(3px);
 }
 
 .dark-theme .chat-item:hover {
@@ -157,11 +159,13 @@
     flex-direction: column;
     gap: 10px;
     background-color: transparent; /* Делаем контейнер прозрачным */
+    transition: background-color var(--transition-duration) var(--transition-timing);
 }
 
 .message {
     display: flex;
     max-width: 80%;
+    animation: messageAppear 0.3s ease-out;
 }
 
 .message-own {
@@ -178,6 +182,9 @@
     background-color: rgba(232, 232, 232, 0.8); /* Полупрозрачный фон для сообщений */
     backdrop-filter: blur(4px); /* Добавляем размытие для лучшей читаемости текста */
     word-break: break-word;
+    transition: background-color var(--transition-duration) var(--transition-timing),
+                border-color var(--transition-duration) var(--transition-timing),
+                box-shadow var(--transition-duration) var(--transition-timing);
 }
 
 .dark-theme .message-content {
@@ -438,6 +445,18 @@
     cursor: pointer;
     margin: 10px 0;
     font-size: 13px;
+}
+
+/* Анимация для новых сообщений */
+@keyframes messageAppear {
+    from {
+        opacity: 0;
+        transform: translateY(15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Адаптивные стили */

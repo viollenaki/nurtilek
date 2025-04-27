@@ -17,6 +17,12 @@
     <script src="{{ url_for('static', filename='js/main.js') }}" defer></script>
 </head>
 <body class="light-theme">
+    <!-- Предзагрузка изображений для плавной смены темы -->
+    <link rel="preload" href="/static/images/background.jpg" as="image">
+    <link rel="preload" href="/static/images/darkBack.jpg" as="image">
+    <link rel="preload" href="/static/images/sun.png" as="image">
+    <link rel="preload" href="/static/images/moon.png" as="image">
+    
     <div class="bg-wrapper"></div>
     
     <div class="app-container">
@@ -34,8 +40,22 @@
                     <button class="theme-toggle" id="themeToggle">
                         <img src="/static/images/sun.png" id="themeIcon" alt="Сменить тему">
                     </button>
-                    <div class="options-icon" id="options-menu-btn">⋮</div>
-                    <div class="refresh-icon">↻</div>
+                    <div class="options-icon" id="drop-down-btn">👤</div>
+                    <div class="dropdown-menu" id="options-dropdown">
+                        <div class="dropdown-item" id="profile-settings-btn">
+                            <span class="dropdown-icon">👤</span>
+                            <span class="dropdown-text">Профиль</span>
+                        </div>
+                        <div class="dropdown-item" id="app-settings-btn">
+                            <span class="dropdown-icon">⚙️</span>
+                            <span class="dropdown-text">Настройки</span>
+                        </div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" id="logout-btn">
+                            <span class="dropdown-icon">🚪</span>
+                            <span class="dropdown-text">Выйти</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -267,6 +287,93 @@
                     </div>
                 </div>
                 <div id="group-message" class="modal-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для управления группой -->
+    <div class="modal-overlay" id="group-info-modal">
+        <div class="modal-content group-info-modal">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="group-info-close-btn">Назад</button>
+                <div class="modal-title">Информация о группе</div>
+                <button class="modal-btn save-btn" id="group-info-save-btn">Сохранить</button>
+            </div>
+            <div class="modal-body">
+                <div class="group-info-container">
+                    <div class="group-info-photo-container">
+                        <div class="profile-photo">
+                            <img src="/static/images/default_group.png" alt="Фото группы" id="group-info-preview-image">
+                            <div class="photo-overlay" id="group-photo-change-overlay" style="display: none;">
+                                <span class="photo-upload-icon">📷</span>
+                            </div>
+                            <input type="file" id="group-info-photo-input" accept="image/*" style="display: none;">
+                        </div>
+                        <div class="photo-caption">Фото группы</div>
+                    </div>
+                    
+                    <div class="group-info-fields">
+                        <div class="form-group">
+                            <label for="group-info-name">Название группы</label>
+                            <input type="text" id="group-info-name" class="input-field" placeholder="Название группы" readonly>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="group-info-description">Описание</label>
+                            <textarea id="group-info-description" class="input-field" placeholder="Описание группы" readonly></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Создатель группы</label>
+                            <div id="group-creator-info" class="group-creator-info"></div>
+                        </div>
+                        
+                        <hr class="divider">
+                        
+                        <div class="group-members-section">
+                            <div class="section-header">
+                                <div class="section-title">Участники группы (<span id="group-members-count">0</span>)</div>
+                                <button class="add-member-btn" id="add-member-btn" style="display: none;">➕ Добавить</button>
+                            </div>
+                            <div id="group-members-list" class="group-members-list"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group-actions">
+                    <button class="btn exit-group-btn" id="exit-group-btn">Покинуть группу</button>
+                    <button class="btn delete-group-btn" id="delete-group-btn" style="display: none;">Удалить группу</button>
+                </div>
+                
+                <div id="group-info-message" class="modal-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для добавления участников в группу -->
+    <div class="modal-overlay" id="add-members-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="modal-btn cancel-btn" id="add-members-close-btn">Отмена</button>
+                <div class="modal-title">Добавить участников</div>
+                <button class="modal-btn save-btn" id="add-members-save-btn">Добавить</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-form">
+                    <div class="search-input-container">
+                        <span class="search-icon-modal">🔍</span>
+                        <input type="text" id="add-members-search-input" class="search-input" 
+                            placeholder="Найти контакты..." autocomplete="off">
+                    </div>
+                </div>
+                <div class="loading-indicator" id="add-members-loading">Поиск...</div>
+                <div class="search-results" id="add-members-results">
+                    <div class="no-results">Введите имя пользователя для поиска</div>
+                </div>
+                <div class="selected-members">
+                    <p>Выбрано: <span id="selected-add-members-count">0</span></p>
+                    <div id="selected-members-list" class="selected-members-list"></div>
+                </div>
             </div>
         </div>
     </div>

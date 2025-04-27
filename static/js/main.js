@@ -7,6 +7,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const themeToggle = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
     
+    // Создаем элемент для эффекта вспышки при смене темы
+    const flashElement = document.createElement('div');
+    flashElement.className = 'theme-flash';
+    document.body.appendChild(flashElement);
+    
     // Проверяем сохраненную тему
     if(localStorage.getItem('theme') === 'dark') {
         document.body.classList.add('dark-theme');
@@ -20,9 +25,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Переключение темы
     themeToggle.addEventListener('click', () => {
+        // Активируем эффект вспышки
+        flashElement.classList.add('active');
+        
+        // Переключаем тему
         document.body.classList.toggle('dark-theme');
         document.body.classList.toggle('light-theme');
         
+        // Меняем иконку темы
         if(document.body.classList.contains('dark-theme')) {
             themeIcon.src = '/static/images/moon.png';
             localStorage.setItem('theme', 'dark');
@@ -30,6 +40,11 @@ document.addEventListener('DOMContentLoaded', function() {
             themeIcon.src = '/static/images/sun.png';
             localStorage.setItem('theme', 'light');
         }
+        
+        // Удаляем класс активности для вспышки
+        setTimeout(() => {
+            flashElement.classList.remove('active');
+        }, 700); // Должно соответствовать продолжительности анимации
     });
 
     // Функционал мобильного меню
@@ -233,5 +248,62 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.chatModule.openChat(lastChatId, lastChatType, lastChatName, lastGroupId);
             }, 1000);
         }
+    }
+
+    // Обработка выпадающего меню пользователя
+    const optionsDropdown = document.getElementById('options-dropdown');
+    
+    // Показать/скрыть выпадающее меню при клике на иконку
+    optionsMenuBtn?.addEventListener('click', function(e) {
+        e.stopPropagation(); // Предотвращаем всплытие события
+        optionsDropdown.classList.toggle('active');
+    });
+    
+    // Скрыть меню при клике в любом месте страницы
+    document.addEventListener('click', function(e) {
+        if (optionsDropdown && optionsDropdown.classList.contains('active') && 
+            !optionsDropdown.contains(e.target)) {
+            optionsDropdown.classList.remove('active');
+        }
+    });
+    
+    // Обработчик для кнопки выхода
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', function() {
+            // Здесь можно добавить запрос на сервер для выхода
+            fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '/login';
+                } else {
+                    console.error('Ошибка при выходе:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка при выходе:', error);
+            });
+        });
+    }
+    
+    // Обработчик для кнопки настроек профиля
+    const profileSettingsBtn = document.getElementById('profile-settings-btn');
+    if (profileSettingsBtn) {
+        profileSettingsBtn.addEventListener('click', function() {
+            // Закрываем выпадающее меню
+            optionsDropdown.classList.remove('active');
+            
+            // Открываем модальное окно редактирования профиля
+            const profileModal = document.getElementById('edit-profile-modal');
+            if (profileModal) {
+                profileModal.classList.add('active');
+            }
+        });
     }
 });

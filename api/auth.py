@@ -310,3 +310,19 @@ def ping():
         print(f"Error updating user activity: {e}")
     
     return jsonify({"success": True, "message": "Pong"})
+
+@auth_bp.route('/api/auth/logout', methods=['POST'])
+def logout():
+    """Log out the current user"""
+    if 'user_id' in session:
+        # Очищаем данные пользователя из сессии
+        session.pop('user_id', None)
+        session.pop('nickname', None)
+        session.pop('email', None)
+        session.pop('current_user_name', None)
+        session.clear()  # Полная очистка сессии
+        
+        return jsonify({"success": True, "message": "Вы успешно вышли из аккаунта"})
+    
+    # Если пользователь не был авторизован
+    return jsonify({"success": True, "message": "Вы не были авторизованы"})

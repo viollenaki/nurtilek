@@ -408,6 +408,187 @@
     resize: vertical;
 }
 
+/* Стили для модального окна информации о группе */
+.group-info-modal {
+    max-width: 500px;
+}
+
+.group-info-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.group-info-photo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 15px;
+}
+
+.group-info-fields {
+    flex-grow: 1;
+}
+
+.group-creator-info {
+    display: flex;
+    align-items: center;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 8px;
+}
+
+.dark-theme .group-creator-info {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.creator-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    margin-right: 10px;
+    overflow: hidden;
+}
+
+.creator-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.add-member-btn {
+    background: none;
+    border: none;
+    color: #25D366;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.dark-theme .add-member-btn {
+    color: #2bd469;
+}
+
+.group-members-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+.dark-theme .group-members-list {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dark-theme .member-item {
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+.member-item:last-child {
+    border-bottom: none;
+}
+
+.member-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin-right: 10px;
+}
+
+.member-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.member-info {
+    flex-grow: 1;
+}
+
+.member-name {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.member-role {
+    font-size: 12px;
+    color: #777;
+}
+
+.dark-theme .member-role {
+    color: #aaa;
+}
+
+.member-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.member-action-btn {
+    background: none;
+    border: none;
+    color: #777;
+    cursor: pointer;
+    font-size: 16px;
+    transition: color 0.2s;
+}
+
+.member-action-btn:hover {
+    color: #ff4757;
+}
+
+.member-admin-toggle {
+    color: #25D366;
+}
+
+.group-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.btn {
+    padding: 10px 15px;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.exit-group-btn {
+    background-color: #f1c40f;
+    color: #333;
+}
+
+.delete-group-btn {
+    background-color: #ff4757;
+    color: white;
+}
+
+.selected-members-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
 /* Адаптивные стили */
 @media (min-width: 768px) {
     .group-edit-container {
@@ -417,5 +598,14 @@
     .group-photo-container {
         margin-bottom: 0;
         margin-right: 20px;
+    }
+
+    .group-info-container {
+        flex-direction: row;
+    }
+    
+    .group-info-photo-container {
+        margin-right: 20px;
+        margin-bottom: 0;
     }
 }
