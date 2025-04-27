@@ -292,3 +292,21 @@ def send_verification_code():
     else:
         conn.close()
         return jsonify({"success": False, "detail": "Не удалось отправить код верификации"}), 500
+
+@auth_bp.route('/api/ping', methods=['GET'])
+def ping():
+    """Simple endpoint to keep user session alive"""
+    if 'user_id' not in session:
+        return jsonify({"success": False, "message": "Не авторизован"}), 401
+    
+    # Обновляем timestamp последней активности пользователя в БД
+    try:
+        conn = get_db_connection()
+        conn.execute('UPDATE users SET last_active = ? WHERE id = ?', 
+                    (datetime.now().isoformat(), session['user_id']))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error updating user activity: {e}")
+    
+    return jsonify({"success": True, "message": "Pong"})

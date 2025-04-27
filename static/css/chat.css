@@ -237,6 +237,67 @@
     background-color: rgba(255, 255, 255, 0.05);
 }
 
+/* Добавляем стили для индикаторов прочтения сообщений */
+.message-read-status {
+    font-size: 12px;
+    margin-left: 5px;
+    color: #aaa;
+    transition: color 0.3s ease;
+}
+
+.message-read-status.read {
+    color: #25D366;
+}
+
+/* Стиль для временного сообщения при отправке */
+.message.sending {
+    opacity: 0.7;
+    animation: sending-pulse 1.5s infinite;
+}
+
+@keyframes sending-pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 0.5; }
+    100% { opacity: 0.7; }
+}
+
+/* Стиль для сообщения с ошибкой */
+.message.error .message-content {
+    background-color: rgba(255, 0, 0, 0.1);
+    border-left: 3px solid #ff4757;
+}
+
+.dark-theme .message.error .message-content {
+    background-color: rgba(255, 0, 0, 0.2);
+}
+
+/* Улучшенный стиль для индикатора новых сообщений */
+.new-messages-indicator {
+    position: absolute;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #25D366;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    z-index: 10;
+    animation: bounce 0.5s;
+    transition: background-color 0.3s;
+}
+
+@keyframes bounce {
+    0% { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.new-messages-indicator:hover {
+    background-color: #128C7E;
+}
+
 /* Форма отправки сообщений */
 .message-form-container {
     padding: 10px 15px;

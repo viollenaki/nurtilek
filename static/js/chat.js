@@ -4,12 +4,16 @@
 
 // Глобальные переменные для отслеживания состояния
 let chatUpdateInterval;
+let chatListUpdateInterval;
+let activeChatlUpdateInterval;
 let currentChatId = null;
 let lastMessageId = null;
 let lastUpdateTime = null;
 let cachedChats = [];
 let isFirstLoad = true;
 let isUpdatingChats = false;
+let isUpdatingMessages = false;
+let lastUserActivity = Date.now();
 
 // Инициализация компонента чата
 function initChatComponent() {
@@ -17,6 +21,15 @@ function initChatComponent() {
     
     // Запускаем обновление списка чатов
     startChatUpdates();
+    
+    // Отслеживание активности пользователя
+    document.addEventListener('mousemove', updateUserActivity);
+    document.addEventListener('keypress', updateUserActivity);
+    document.addEventListener('click', updateUserActivity);
+    document.addEventListener('touchstart', updateUserActivity);
+    
+    // Проверка активности пользователя каждые 30 секунд
+    setInterval(checkUserActivity, 30000);
     
     // Обработчик для кнопки отправки сообщения
     const sendMessageBtn = document.getElementById('send-message-btn');
@@ -64,13 +77,23 @@ function startChatUpdates() {
     // Обновляем список чатов сразу при запуске
     updateChatsList();
     
-    // Устанавливаем интервал обновления (1 секунда)
-    chatUpdateInterval = setInterval(updateChatsList, 1000);
+    // Устанавливаем интервал обновления для списка чатов - более частое обновление (1 секунда)
+    chatListUpdateInterval = setInterval(updateChatsList, 1000);
     
     // Обрабатываем случай, когда пользователь уходит со страницы
     window.addEventListener('beforeunload', function() {
-        if (chatUpdateInterval) {
-            clearInterval(chatUpdateInterval);
+        if (chatListUpdateInterval) clearInterval(chatListUpdateInterval);
+        if (activeChatlUpdateInterval) clearInterval(activeChatlUpdateInterval);
+    });
+    
+    // Добавляем обработчик для видимости вкладки
+    document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+            // Страница стала видимой - немедленно обновляем данные
+            updateChatsList();
+            if (currentChatId) {
+                updateCurrentChatMessages();
+            }
         }
     });
 }
@@ -385,46 +408,103 @@ async function loadChatMessages(chatId, offset = 0) {
 
 // Обновление сообщений текущего чата
 async function updateCurrentChatMessages() {
-    if (!currentChatId) return;
+    if (!currentChatId || isUpdatingMessages) return;
+    
+    isUpdatingMessages = true;
     
     try {
         // Если у нас нет lastMessageId, делаем полную загрузку
         if (!lastMessageId) {
-            loadChatMessages(currentChatId);
+            await loadChatMessages(currentChatId);
+            isUpdatingMessages = false;
             return;
         }
         
         // Запрашиваем только новые сообщения
         const response = await fetch(`/api/chat/${currentChatId}/messages?after_id=${lastMessageId}`);
+        
+        // Обработка ответов с ошибками
         if (!response.ok) {
-            throw new Error('Ошибка обновления сообщений');
+            if (response.status === 401) {
+                // Сессия истекла, нужно перенаправить на страницу входа
+                console.warn("Сессия истекла. Требуется повторная авторизация.");
+                handleSessionExpired();
+                isUpdatingMessages = false;
+                return;
+            }
+            throw new Error(`Ошибка обновления сообщений: ${response.status}`);
         }
         
         const data = await response.json();
         
-        if (data.success && data.messages.length > 0) {
+        if (data.success && data.messages && data.messages.length > 0) {
+            console.log(`Получено ${data.messages.length} новых сообщений`);
             const messagesContainer = document.querySelector('.messages-container');
+            if (!messagesContainer) {
+                console.error('Контейнер сообщений не найден');
+                isUpdatingMessages = false;
+                return;
+            }
+            
             const atBottom = isScrolledToBottom(messagesContainer);
             
-            // Обновляем ID последнего сообщения
-            lastMessageId = data.messages[0].id;
+            // Обновляем ID последнего сообщения из полученных новых сообщений
+            const messageIds = data.messages.map(m => m.id).filter(id => typeof id === 'number');
+            if (messageIds.length > 0) {
+                const maxId = Math.max(...messageIds);
+                if (maxId > lastMessageId) {
+                    lastMessageId = maxId;
+                    console.log(`Обновлен lastMessageId: ${lastMessageId}`);
+                }
+            }
             
             // Добавляем новые сообщения в конец
-            data.messages
-                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-                .forEach(message => {
-                    const messageElement = document.createElement('div');
-                    messageElement.innerHTML = createMessageElement(message);
-                    messagesContainer.appendChild(messageElement.firstChild);
-                });
+            data.messages.forEach(message => {
+                if (!message.id) {
+                    console.warn('Сообщение без ID:', message);
+                    return;
+                }
+                
+                // Проверяем, что сообщение еще не существует в DOM
+                const existingMessage = document.querySelector(`.message[data-message-id="${message.id}"]`);
+                if (!existingMessage) {
+                    // Создаем элемент сообщения
+                    try {
+                        const messageHTML = createMessageElement(message);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = messageHTML;
+                        
+                        if (tempDiv.firstChild) {
+                            messagesContainer.appendChild(tempDiv.firstChild);
+                            console.log(`Добавлено сообщение ID: ${message.id}`);
+                        } else {
+                            console.error(`Не удалось создать элемент для сообщения:`, message);
+                        }
+                    } catch (error) {
+                        console.error(`Ошибка при создании элемента сообщения:`, error, message);
+                    }
+                } else {
+                    // Обновляем статус прочтения для существующего сообщения
+                    const readStatusElement = existingMessage.querySelector('.message-read-status');
+                    if (readStatusElement && message.read_count) {
+                        readStatusElement.textContent = '✓✓';
+                        readStatusElement.classList.add('read');
+                    }
+                }
+            });
             
             // Если пользователь был внизу чата, прокручиваем к новым сообщениям
             if (atBottom) {
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else if (data.messages.length > 0) {
+                // Показываем индикатор новых сообщений
+                showNewMessagesIndicator(data.messages.length);
             }
         }
     } catch (error) {
         console.error('Ошибка при обновлении сообщений:', error);
+    } finally {
+        isUpdatingMessages = false;
     }
 }
 
@@ -436,11 +516,28 @@ function isScrolledToBottom(element) {
 
 // Создание HTML элемента сообщения
 function createMessageElement(message) {
+    if (!message || !message.id) {
+        console.error('Получено некорректное сообщение:', message);
+        return '';
+    }
+    
     // Определяем, свое сообщение или нет
     const messageClass = message.is_own ? 'message-own' : 'message-other';
     
     // Форматируем время сообщения
-    const messageTime = formatMessageTime(new Date(message.timestamp));
+    let messageTime;
+    try {
+        messageTime = formatMessageTime(new Date(message.timestamp));
+    } catch (e) {
+        console.error('Ошибка форматирования времени:', e);
+        messageTime = 'неизвестно';
+    }
+    
+    // Статус прочтения (только для собственных сообщений)
+    const readStatus = message.is_own ? 
+        `<span class="message-read-status ${message.read_count ? 'read' : ''}">
+            ${message.read_count ? '✓✓' : '✓'}
+        </span>` : '';
     
     // Подготовка содержимого сообщения
     let messageContent = '';
@@ -491,6 +588,7 @@ function createMessageElement(message) {
                 ${messageContent}
                 <div class="message-info">
                     <span class="message-time">${messageTime}</span>
+                    ${readStatus}
                     ${message.is_edited ? '<span class="message-edited">(изм.)</span>' : ''}
                 </div>
             </div>
@@ -516,49 +614,274 @@ async function sendMessage() {
         return;
     }
     
+    // Сразу очистим поле ввода после получения текста
+    const messageCopy = messageText;
+    messageInput.value = '';
+    
     // Создаем FormData для отправки данных и файлов
     const formData = new FormData();
-    formData.append('content', messageText);
+    formData.append('content', messageCopy);
     
     // Добавляем файл, если он выбран
     if (hasFile) {
         formData.append('media', fileInput.files[0]);
+        fileInput.value = '';
+        document.querySelector('.selected-file').style.display = 'none';
     }
     
     try {
-        // Показываем анимацию отправки (можно добавить)
-        messageInput.disabled = true;
+        // Создаем временное сообщение в чате для немедленной обратной связи
+        const tempId = `temp-${Date.now()}`;
+        const messagesContainer = document.querySelector('.messages-container');
         
+        // Создаем DOM элемент для временного сообщения
+        const tempMessage = document.createElement('div');
+        tempMessage.className = 'message message-own sending';
+        tempMessage.dataset.messageId = tempId;
+        tempMessage.innerHTML = `
+            <div class="message-content">
+                <div class="message-text">${messageCopy}</div>
+                <div class="message-info">
+                    <span class="message-time">Отправка...</span>
+                    <span class="message-read-status">⌛</span>
+                </div>
+            </div>
+        `;
+        
+        // Добавляем временное сообщение в контейнер и прокручиваем вниз
+        messagesContainer.appendChild(tempMessage);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        console.log('Отправка сообщения:', messageCopy);
+        
+        // Отправляем сообщение на сервер
         const response = await fetch(`/api/chat/${currentChatId}/send_message`, {
             method: 'POST',
             body: formData
         });
         
-        if (!response.ok) {
-            throw new Error(`Ошибка отправки сообщения: ${response.status}`);
-        }
-        
         const data = await response.json();
+        console.log('Ответ сервера:', data);
         
         if (data.success) {
-            // Очищаем поля после успешной отправки
-            messageInput.value = '';
-            fileInput.value = '';
-            document.querySelector('.selected-file').style.display = 'none';
+            // Находим временное сообщение
+            const tempMsgElement = document.querySelector(`[data-message-id="${tempId}"]`);
             
-            // Обновляем сообщения в чате
-            updateCurrentChatMessages();
+            if (data.message) {
+                console.log('Полученное сообщение от сервера:', data.message);
+                
+                if (tempMsgElement) {
+                    // Обновляем существующее временное сообщение вместо удаления и создания нового
+                    tempMsgElement.dataset.messageId = data.message.id;
+                    tempMsgElement.classList.remove('sending');
+                    
+                    // Обновляем время и статус сообщения
+                    const messageInfo = tempMsgElement.querySelector('.message-info');
+                    if (messageInfo) {
+                        const timeElement = messageInfo.querySelector('.message-time');
+                        if (timeElement) {
+                            timeElement.textContent = formatMessageTime(new Date(data.message.timestamp));
+                        }
+                        
+                        const readStatusElement = messageInfo.querySelector('.message-read-status');
+                        if (readStatusElement) {
+                            readStatusElement.textContent = '✓';
+                        }
+                    }
+                    
+                    // Если в ответе есть какие-то медиа, обновляем контент
+                    if (data.message.has_media && !tempMsgElement.querySelector('.message-media')) {
+                        const messageContent = tempMsgElement.querySelector('.message-content');
+                        const messageText = messageContent.querySelector('.message-text');
+                        
+                        // Создаем медиа элемент в зависимости от типа
+                        let mediaHTML = '';
+                        switch (data.message.media_type) {
+                            case 'image':
+                                mediaHTML = `<div class="message-media">
+                                    <img src="/api/chat/media/${data.message.id}" alt="Изображение" class="media-image">
+                                </div>`;
+                                break;
+                            case 'video':
+                                mediaHTML = `<div class="message-media">
+                                    <video controls class="media-video">
+                                        <source src="/api/chat/media/${data.message.id}" type="video/mp4">
+                                        Ваш браузер не поддерживает видео.
+                                    </video>
+                                </div>`;
+                                break;
+                            case 'audio':
+                                mediaHTML = `<div class="message-media">
+                                    <audio controls class="media-audio">
+                                        <source src="/api/chat/media/${data.message.id}" type="audio/mpeg">
+                                        Ваш браузер не поддерживает аудио.
+                                    </audio>
+                                </div>`;
+                                break;
+                            case 'file':
+                                mediaHTML = `<div class="message-media">
+                                    <a href="/api/chat/media/${data.message.id}" download class="media-file">
+                                        📎 Скачать файл
+                                    </a>
+                                </div>`;
+                                break;
+                        }
+                        
+                        if (mediaHTML) {
+                            // Вставляем медиа перед текстом сообщения
+                            if (messageText) {
+                                messageText.insertAdjacentHTML('beforebegin', mediaHTML);
+                            } else {
+                                messageContent.insertAdjacentHTML('afterbegin', mediaHTML);
+                            }
+                        }
+                    }
+                } else {
+                    // Если по какой-то причине временное сообщение исчезло, создаем новое
+                    const realMessageHTML = createMessageElement(data.message);
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = realMessageHTML;
+                    
+                    if (tempDiv.firstChild) {
+                        messagesContainer.appendChild(tempDiv.firstChild);
+                    } else {
+                        console.error('Не удалось создать элемент для сообщения:', data.message);
+                    }
+                }
+                
+                // Обновляем lastMessageId
+                if (data.message.id > (lastMessageId || 0)) {
+                    lastMessageId = data.message.id;
+                    console.log(`Обновлен lastMessageId: ${lastMessageId}`);
+                }
+                
+                // Прокрутка к последнему сообщению
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } else {
+                console.warn('Сервер не вернул данные о сообщении');
+                // Если сервер не вернул данные о сообщении, но сказал что успех,
+                // оставим временное сообщение, но уберем статус "отправки"
+                if (tempMsgElement) {
+                    tempMsgElement.classList.remove('sending');
+                    const readStatusElement = tempMsgElement.querySelector('.message-read-status');
+                    if (readStatusElement) {
+                        readStatusElement.textContent = '✓';
+                    }
+                    const timeElement = tempMsgElement.querySelector('.message-time');
+                    if (timeElement) {
+                        timeElement.textContent = formatMessageTime(new Date());
+                    }
+                }
+            }
+            
+            // Запускаем обновление списка чатов через небольшую задержку
+            setTimeout(() => updateChatsList(), 300);
         } else {
             console.error('Ошибка при отправке сообщения:', data.message);
             alert('Не удалось отправить сообщение: ' + data.message);
+            
+            // Заменяем временное сообщение на ошибку
+            const tempMsgElement = document.querySelector(`[data-message-id="${tempId}"]`);
+            if (tempMsgElement) {
+                tempMsgElement.classList.add('error');
+                tempMsgElement.querySelector('.message-time').textContent = 'Ошибка';
+                tempMsgElement.querySelector('.message-read-status').textContent = '❌';
+            }
         }
     } catch (error) {
         console.error('Ошибка при отправке сообщения:', error);
         alert('Ошибка при отправке сообщения: ' + error.message);
-    } finally {
-        messageInput.disabled = false;
-        messageInput.focus();
+        
+        // Возвращаем текст сообщения обратно в поле ввода при ошибке
+        messageInput.value = messageCopy;
     }
+}
+
+// Показать индикатор новых сообщений
+function showNewMessagesIndicator(count) {
+    // Проверяем, существует ли уже индикатор
+    let indicator = document.querySelector('.new-messages-indicator');
+    const chatInterface = document.querySelector('.chat-interface');
+    
+    if (!chatInterface) return;
+    
+    if (!indicator) {
+        // Создаем индикатор
+        indicator = document.createElement('div');
+        indicator.className = 'new-messages-indicator';
+        indicator.textContent = `${count} новых сообщений ↓`;
+        
+        // Добавляем обработчик клика для прокрутки
+        indicator.addEventListener('click', function() {
+            const messagesContainer = document.querySelector('.messages-container');
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                indicator.remove();
+            }
+        });
+        
+        chatInterface.appendChild(indicator);
+    } else {
+        // Обновляем текст индикатора
+        indicator.textContent = `${count} новых сообщений ↓`;
+    }
+    
+    // Автоматически скрываем индикатор через 5 секунд
+    setTimeout(() => {
+        if (indicator && indicator.parentElement) {
+            indicator.remove();
+        }
+    }, 5000);
+}
+
+// Определение типа медиа файла
+function getMediaTypeFromFile(file) {
+    if (!file) return null;
+    const type = file.type;
+    if (type.startsWith('image/')) return 'image';
+    if (type.startsWith('video/')) return 'video';
+    if (type.startsWith('audio/')) return 'audio';
+    return 'file';
+}
+
+// Поддержание сессии активной
+function keepSessionAlive() {
+    fetch('/api/ping', { 
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin'
+    }).catch(error => {
+        console.log('Ошибка при обновлении сессии:', error);
+    });
+}
+
+// Обработка истекшей сессии
+function handleSessionExpired() {
+    // Останавливаем все интервалы
+    if (chatListUpdateInterval) clearInterval(chatListUpdateInterval);
+    if (activeChatlUpdateInterval) clearInterval(activeChatlUpdateInterval);
+    
+    // Показываем уведомление
+    const notification = document.createElement('div');
+    notification.className = 'session-expired';
+    notification.innerHTML = `
+        <div class="session-message">
+            <h3>Сессия истекла</h3>
+            <p>Требуется повторная авторизация</p>
+            <button id="relogin-btn">Войти снова</button>
+        </div>
+    `;
+    document.body.appendChild(notification);
+    
+    // Обработчик для кнопки
+    document.getElementById('relogin-btn').addEventListener('click', () => {
+        window.location.href = '/login';
+    });
+    
+    // Автоматическое перенаправление через 5 секунд
+    setTimeout(() => {
+        window.location.href = '/login';
+    }, 5000);
 }
 
 // Обработка выбранного файла
@@ -598,11 +921,31 @@ function formatFileSize(bytes) {
     else return (bytes / 1048576).toFixed(2) + ' МБ';
 }
 
+// Обновление активности пользователя
+function updateUserActivity() {
+    lastUserActivity = Date.now();
+}
+
+// Проверка активности пользователя
+function checkUserActivity() {
+    const now = Date.now();
+    const inactivityThreshold = 5 * 60 * 1000; // 5 минут
+    if (now - lastUserActivity > inactivityThreshold) {
+        console.log('Пользователь неактивен');
+        // Можно добавить логику для обработки неактивности
+    } else {
+        console.log('Пользователь активен');
+    }
+}
+
 // Экспорт функций для доступа из других модулей
 window.chatModule = {
     initChatComponent,
     openChat,
     closeCurrentChat,
     updateChatsList,
-    getCurrentChatId
+    getCurrentChatId,
+    updateCurrentChatMessages,
+    updateUserActivity,
+    keepSessionAlive
 };

@@ -358,6 +358,67 @@ body {
     background-color: #128C7E;
 }
 
+/* Стили для уведомления об истечении сессии */
+.session-expired {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.session-message {
+    background-color: var(--card-bg);
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    max-width: 350px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.session-message h3 {
+    color: var(--text-color);
+    margin-bottom: 15px;
+}
+
+.session-message p {
+    color: var(--text-color);
+    margin-bottom: 20px;
+}
+
+#relogin-btn {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s;
+}
+
+#relogin-btn:hover {
+    background-color: #128C7E;
+    transform: scale(1.05);
+}
+
+/* Стиль для сообщений в процессе отправки */
+.message.sending {
+    opacity: 0.7;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.7; }
+    50% { opacity: 0.5; }
+    100% { opacity: 0.7; }
+}
+
 /* Модификации для мобильного интерфейса */
 @media (max-width: 768px) {
     .sidebar {
