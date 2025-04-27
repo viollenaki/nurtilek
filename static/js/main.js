@@ -83,6 +83,16 @@ document.addEventListener('DOMContentLoaded', function() {
     drawerCloseBtn?.addEventListener('click', closeDrawer);
     drawerOverlay?.addEventListener('click', closeDrawer);
     
+    // При клике вне меню закрываем его
+    document.addEventListener('click', function(event) {
+        if (optionsDrawer.classList.contains('active') && 
+            !optionsDrawer.contains(event.target) && 
+            event.target !== optionsMenuBtn && 
+            event.target !== chatOptionsMenuBtn) {
+            closeDrawer();
+        }
+    });
+    
     // Обработчики для элементов меню
     document.querySelectorAll('.drawer-item').forEach(item => {
         item.addEventListener('click', function() {

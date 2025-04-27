@@ -93,7 +93,7 @@
     height: 100%;
     width: 100%;
     position: relative;
-    background-color: var(--bg-color);
+    background-color: transparent; /* Полностью прозрачный фон */
     z-index: 2;
 }
 
@@ -102,9 +102,15 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 15px;
-    background-color: var(--header-bg);
+    background-color: rgba(18, 140, 126, 0.6); /* Более прозрачный заголовок */
+    backdrop-filter: blur(12px); /* Увеличиваем эффект размытия заголовка */
+    -webkit-backdrop-filter: blur(12px);
     color: var(--header-text);
     border-bottom: 1px solid var(--sidebar-border);
+}
+
+.dark-theme .chat-header {
+    background-color: rgba(7, 94, 84, 0.6); /* Более прозрачный темный заголовок */
 }
 
 .chat-header-info {
@@ -150,7 +156,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    background-color: var(--bg-color);
+    background-color: transparent; /* Делаем контейнер прозрачным */
 }
 
 .message {
@@ -169,20 +175,21 @@
 .message-content {
     padding: 10px 12px;
     border-radius: 10px;
-    background-color: #E8E8E8;
+    background-color: rgba(232, 232, 232, 0.8); /* Полупрозрачный фон для сообщений */
+    backdrop-filter: blur(4px); /* Добавляем размытие для лучшей читаемости текста */
     word-break: break-word;
 }
 
 .dark-theme .message-content {
-    background-color: #2A2A2A;
+    background-color: rgba(42, 42, 42, 0.8); /* Полупрозрачный темный фон */
 }
 
 .message-own .message-content {
-    background-color: #DCF8C6;
+    background-color: rgba(220, 248, 198, 0.9); /* Полупрозрачный зеленоватый фон для своих сообщений */
 }
 
 .dark-theme .message-own .message-content {
-    background-color: #056162;
+    background-color: rgba(5, 97, 98, 0.9); /* Полупрозрачный темно-зеленый для темной темы */
 }
 
 .message-text {
@@ -301,11 +308,14 @@
 /* Форма отправки сообщений */
 .message-form-container {
     padding: 10px 15px;
-    background-color: var(--card-bg);
+    background-color: rgba(255, 255, 255, 0.4); /* Прозрачный фон для формы */
+    backdrop-filter: blur(12px); /* Увеличиваем эффект размытия */
+    -webkit-backdrop-filter: blur(12px);
     border-top: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .dark-theme .message-form-container {
+    background-color: rgba(30, 30, 30, 0.4); /* Прозрачный темный фон */
     border-top-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -402,8 +412,17 @@
 .no-messages, .loading-messages, .error-message {
     text-align: center;
     padding: 20px;
-    color: var(--icon-color);
+    color: var(--text-color);
     font-style: italic;
+    background-color: rgba(255, 255, 255, 0.3); /* Более прозрачный фон */
+    border-radius: 10px;
+    backdrop-filter: blur(6px); /* Увеличиваем эффект размытия */
+}
+
+.dark-theme .no-messages, 
+.dark-theme .loading-messages, 
+.dark-theme .error-message {
+    background-color: rgba(0, 0, 0, 0.3); /* Более прозрачный темный фон */
 }
 
 .error-message {
